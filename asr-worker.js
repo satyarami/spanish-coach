@@ -10,11 +10,11 @@ async function hasWebGPU() {
 }
 function progress(p) { if (p.status === 'progress' || p.status === 'done' || p.status === 'initiate') self.postMessage({ type: 'progress', file: p.file, loaded: p.loaded, total: p.total, status: p.status }); }
 
-async function load(model) {
+async function load(model, gpu) {
   if (asr) return asr;
   if (!loading) {
     loading = (async () => {
-      if (await hasWebGPU()) {
+      if (gpu && await hasWebGPU()) {
         try {
           asr = await pipeline('automatic-speech-recognition', model, { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, progress_callback: progress });
           device = 'webgpu';
@@ -35,12 +35,12 @@ async function load(model) {
 self.onmessage = async e => {
   const m = e.data;
   if (m.type === 'load') {
-    try { await load(m.model); self.postMessage({ type: 'ready', device }); }
+    try { await load(m.model, m.gpu); self.postMessage({ type: 'ready', device }); }
     catch (err) { loading = null; self.postMessage({ type: 'error', error: String(err && err.message || err) }); }
   } else if (m.type === 'asr') {
     const t0 = Date.now();
     try {
-      await load(m.model);
+      await load(m.model, m.gpu);
       const out = await asr(m.audio, { language: m.language, task: 'transcribe', max_new_tokens: m.maxTokens || 48 });
       self.postMessage({ type: 'result', id: m.id, text: (out && out.text || '').trim(), ms: Date.now() - t0, device });
     } catch (err) {

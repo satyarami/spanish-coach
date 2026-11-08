@@ -2,10 +2,12 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.3.1';
 const CHANGELOG = [
+  { v: '1.3.1', date: '2026-11-08', items: [
+    'Fix: Safari crash. The experimental GPU listening mode is now off by default.'
+  ] },
   { v: '1.3.0', date: '2026-11-08', items: [
-    'Faster listening: the speech model runs on the iPhone graphics chip when available (one-time extra download).',
     'Responds sooner after you stop talking, with a soft tick when it has heard you.',
     'Better at noticing softer speech, so fewer repeats.',
     'The status line shows how long recognition took.'
@@ -64,7 +66,7 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 // ---------- state ----------
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
-  settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null },
+  settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null, gpu: false },
   session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
 let S;
@@ -245,17 +247,18 @@ let asrDevice = '', asrW = null, asrReady = false, asrErr = null, asrWaiters = [
 function asrStart() {
   if (asrW || asrReady) return;
   asrErr = null;
+  S.asrLoading = true; save();
   try { asrW = new Worker('asr-worker.js', { type: 'module' }); } catch (e) { asrErr = 'worker: ' + e.message; return; }
   const files = {};
   asrW.onmessage = e => {
     const m = e.data;
     if (m.type === 'progress') { if (m.file && m.total) files[m.file] = [m.loaded || 0, m.total]; let l = 0, t = 0; Object.values(files).forEach(([a, b]) => { l += a; t += b; }); asrProgress(t ? l / t : 0, t); }
-    else if (m.type === 'ready') { asrReady = true; asrDevice = m.device || ''; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
+    else if (m.type === 'ready') { S.asrLoading = false; save(); asrReady = true; asrDevice = m.device || ''; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
     else if (m.type === 'error') { asrErr = m.error; asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
     else if (m.type === 'result') { const r = asrPending[m.id]; delete asrPending[m.id]; if (r) r(m); }
   };
   asrW.onerror = e => { asrErr = 'worker error ' + (e.message || ''); asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); };
-  asrW.postMessage({ type: 'load', model: ASR_MODEL });
+  asrW.postMessage({ type: 'load', model: ASR_MODEL, gpu: !!S.settings.gpu });
 }
 function asrProgress(f, total) {
   const el = $('#asrLoad'); if (!el) return;
@@ -265,7 +268,7 @@ function asrProgress(f, total) {
 }
 async function asrWait() { asrStart(); if (asrReady || asrErr) return; await new Promise(r => asrWaiters.push(r)); }
 function transcribe(audio, language, maxTokens) {
-  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, maxTokens, model: ASR_MODEL }, [audio.buffer]); });
+  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, maxTokens, model: ASR_MODEL, gpu: !!S.settings.gpu }, [audio.buffer]); });
 }
 function setAudioSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
 function concatF32(arr) { let n = 0; arr.forEach(a => n += a.length); const o = new Float32Array(n); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; }
@@ -716,7 +719,7 @@ function unlockAudio() {
 }
 function startOrContinue(restart) {
   unlockAudio();
-  if (engine() === 'ondevice') asrStart();
+  if (engine() === 'ondevice') { if (S.asrLoading) { S.settings.gpu = false; } asrStart(); }
   if (S.pos >= SCHEDULE.length) { alertBox("You've finished every lesson in this release. Send feedback and ask Claude for the next block."); return; }
   if (restart || !S.session || S.session.pos !== S.pos) S.session = planSession();
   save(); runSession();
