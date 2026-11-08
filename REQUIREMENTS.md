@@ -82,9 +82,11 @@ The 6 months are split into four phases of about 6 weeks each. Every sixth sessi
 
 The app should feel like a game with a story, not a drill.
 
+**Your name:** on first use the coach asks your name by voice. Before saving it, the coach says it back the way the Spanish voice will pronounce it and asks whether that's right. If you say no, you say it again slowly, the way it sounds, and the coach tries again, up to 3 times. You can redo it anytime under Voices → Your name.
+
 - **A running story:** the lessons follow a trip from Mexico City to Oaxaca and on to the coast. Each scene is a new place with new characters.
 - **A coach character:** Lola, a warm and playful host who cheers in Spanish ("¡Eso es!", "¡Qué bien!").
-- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds. Every correct answer gets spoken praise, with varied cheers and bigger celebrations at 3, 5 and 10 in a row. Misses get kind wording ("Good try", "Casi").
+- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds. Every correct answer gets spoken praise that uses your name ("¡Muy bien, Satya!"), with varied cheers and bigger celebrations at 3, 5 and 10 in a row. Misses get kind wording ("Good try", "Casi").
 - **Daily streak:** a pass extends your streak, which shows on the home screen.
 - **Levels:** Turista → Viajero → Conversador → Experto, each with a short celebration.
 - **Sounds:** a short fanfare when you pass a quiz, and soft chimes for right answers. There are no harsh buzzers.
