@@ -22,7 +22,7 @@ The app teaches Spanish or Gujarati, chosen from a menu on the home screen.
 - **Separate progress per language:** lesson, streak, points, phrase memory and any session in progress are kept separately for each language. Existing Spanish progress moves into the Spanish slot unchanged.
 - **Same format:** Gujarati follows the same 15-minute sessions, quiz rule (8 of 10), name, voices, lessons menu and feedback as Spanish.
 - **Gujarati content:** beginner course for an English speaker, set on a trip through Gujarat. The first block has 10 lessons and 2 review days; more follow at the same link. After you answer, the text shows in Gujarati script with a romanized form (for example "kem cho").
-- **Depends on the iPhone:** the iPhone has no Gujarati voice, so Gujarati is spoken by the Hindi voice Lekha. The app converts the Gujarati text to Hindi letters, which line up one-to-one. Satya approved how it sounds. Listening uses on-device recognition and compares answers by sound, so Gujarati script, Hindi script or English letters all count.
+- **Depends on the iPhone:** the iPhone has no Gujarati voice, so Gujarati is spoken only by the Hindi voice Lekha, with no voice choice for Gujarati. The app converts the Gujarati text to Hindi letters, which line up one-to-one. Satya approved how it sounds. Listening uses on-device recognition and compares answers by sound, so Gujarati script, Hindi script or English letters all count.
 
 ## Daily session (15 min) and quiz gate
 
