@@ -12,6 +12,8 @@ button.b{background:#1f3b3a}
 <button class="b" id="t1">1 · Speak a test phrase</button>
 <button id="t2">2 · Listen in Spanish (say "hola")</button>
 <button id="t3">3 · Listen in English (say "hello")</button>
+<button class="b" id="t4">4 · Gujarati check: list voices and speak</button>
+<button id="t5">5 · Gujarati read by the Hindi voice (Lekha)</button>
 <div id="log"></div>
 <script>
 const L = m => { const d = new Date(); document.getElementById('log').textContent += d.toTimeString().slice(0,8) + '  ' + m + '\n'; };
@@ -36,6 +38,31 @@ function listen(lang) {
   try { r.start(); L(lang + ' start() called'); } catch (e) { L(lang + ' start exception: ' + e); }
   setTimeout(() => { try { r.stop(); } catch (e) {} }, 8000);
 }
+document.getElementById('t4').onclick = () => {
+  let tries = 0;
+  const go = () => {
+    const v = speechSynthesis.getVoices();
+    if (!v.length && tries++ < 10) { setTimeout(go, 300); return; }
+    const gu = v.filter(x => /^gu/i.test(x.lang)), hi = v.filter(x => /^hi/i.test(x.lang));
+    L('All voices: ' + v.length);
+    L('Gujarati voices: ' + (gu.length ? gu.map(x => x.name + ' ' + x.lang).join(', ') : 'NONE'));
+    L('Hindi voices: ' + (hi.length ? hi.map(x => x.name + ' ' + x.lang).join(', ') : 'none'));
+    L('Indian-region voices: ' + v.filter(x => /-IN$/i.test(x.lang)).map(x => x.lang).filter((x, i, a) => a.indexOf(x) === i).join(', '));
+    try { const u = new SpeechSynthesisUtterance('કેમ છો? હું મજામાં છું.'); u.lang = 'gu-IN'; if (gu[0]) u.voice = gu[0];
+      u.onstart = () => L('gu speak: started' + (gu[0] ? ' with ' + gu[0].name : ' (no Gujarati voice, default used)')); u.onend = () => L('gu speak: ended'); u.onerror = e => L('gu speak ERROR ' + e.error);
+      speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { L('gu speak exception ' + e); }
+  };
+  go();
+};
+const guToDeva = t => t.replace(/[઀-૿]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x180));
+document.getElementById('t5').onclick = () => {
+  const lines = ['કેમ છો? હું મજામાં છું.', 'મારું નામ સત્ય છે.', 'મને ગુજરાતી શીખવું છે.', 'આવજો!'];
+  const v = speechSynthesis.getVoices().find(x => /^hi/i.test(x.lang));
+  L('Hindi voice: ' + (v ? v.name : 'not found'));
+  speechSynthesis.cancel();
+  lines.forEach((g, i) => { const d = guToDeva(g); const u = new SpeechSynthesisUtterance(d); u.lang = 'hi-IN'; if (v) u.voice = v; u.rate = 0.9;
+    u.onstart = () => L('speaking ' + (i + 1) + ': ' + g + '  →  ' + d); speechSynthesis.speak(u); });
+};
 document.getElementById('t2').onclick = () => listen('es-MX');
 document.getElementById('t3').onclick = () => listen('en-US');
 </script></body></html>

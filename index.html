@@ -70,10 +70,12 @@ button{font:inherit;cursor:pointer;border:0}
 @keyframes pulse{50%{transform:scale(1.06)}}
 @keyframes ring{from{transform:scale(.9);opacity:1}to{transform:scale(1.25);opacity:0}}
 .orbLabel{font-size:14px;color:var(--muted);min-height:20px}
-#es{font-family:Fraunces,Georgia,serif;font-size:30px;line-height:1.2;color:var(--ink);min-height:36px}
+#es{font-family:Fraunces,Georgia,serif;font-size:30px;line-height:1.2;color:var(--ink);min-height:36px;white-space:pre-line}
+.langpick{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-weight:600;color:var(--teal)}
+.langpick select{flex:1;font:inherit;font-weight:600;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
 #en{color:var(--muted);min-height:22px}
 #combo{font-family:Fraunces,serif;color:var(--terra);font-size:22px;min-height:28px}
-#tapBtn{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%);width:220px;padding:20px;border-radius:999px;background:var(--gold);color:var(--ink);font-weight:700;font-size:18px;box-shadow:0 8px 24px #0002}
+#tapBtn{position:fixed;left:50%;bottom:calc(170px + env(safe-area-inset-bottom));transform:translateX(-50%);width:220px;padding:20px;border-radius:999px;background:var(--gold);color:var(--ink);font-weight:700;font-size:18px;box-shadow:0 8px 24px #0002}
 .controls{position:fixed;left:0;right:0;bottom:0;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--paper) 30%)}
 .controls .row{max-width:520px;margin:0 auto}
 .overlay{position:fixed;inset:0;background:#1f3b3ae6;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20;padding:24px;text-align:center}
@@ -91,6 +93,13 @@ button{font:inherit;cursor:pointer;border:0}
 .voice .vn{font-weight:600}
 .voice .vm{font-size:13px;color:var(--muted);grid-row:2}
 .voice .play{grid-row:1/3;grid-column:2;align-self:center;color:var(--terra)}
+.lesson{display:flex;gap:12px;align-items:center;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:8px 0}
+.lesson .li{font-size:20px;width:28px;text-align:center}
+.lesson .lt{display:flex;flex-direction:column}
+.lesson small{color:var(--muted);font-size:13px}
+.lesson.current{border-color:var(--gold);box-shadow:0 0 0 2px #f2a54144}
+.lesson.locked{opacity:.5}
+.btn.ghost:disabled{opacity:.35}
 label.sw{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
 input[type=range]{width:100%}
 .mic{width:120px;height:120px;border-radius:50%;background:var(--terra);color:#fff;font-size:44px;margin:10px auto;display:block}
@@ -115,9 +124,13 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <div class="brand display">Habla<span style="color:var(--terra)">.</span></div>
     <div class="row" style="flex:0 0 auto">
       <button class="iconbtn" id="homeFb">Feedback<span class="badge" id="fbBadge"></span></button>
+      <button class="iconbtn" id="lessonsBtn">Lessons</button>
       <button class="iconbtn" id="settingsBtn">Voices</button>
     </div>
   </div>
+  <label class="langpick">Learning
+    <select id="langSel"><option value="es">Español · Spanish</option><option value="gu">ગુજરાતી · Gujarati</option></select>
+  </label>
   <div class="hero">
     <div class="num" id="nextNum"></div>
     <h2 id="nextTitle"></h2>
@@ -178,7 +191,10 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <div class="row" id="nameConfirm" hidden style="margin-top:12px"><button class="btn ghost" id="nameNo">No, fix it</button><button class="btn" id="nameYes">Yes, that's right</button></div>
   </div>
   <button id="tapBtn" hidden>🎙 Tap here, then speak</button>
-  <div class="controls"><div class="row">
+  <div class="controls"><div class="row" style="margin-bottom:8px">
+    <button class="btn ghost" id="rwBtn">⏪ 30s</button>
+    <button class="btn ghost" id="ffBtn">30s ⏩</button>
+  </div><div class="row">
     <button class="btn ghost" id="homeBtn">Home</button>
     <button class="btn ghost" id="sessFb">Feedback</button>
     <button class="btn" id="pauseBtn" style="font-size:16px;padding:12px">Pause</button>
@@ -190,6 +206,13 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   </div>
 </section>
 
+<!-- LESSONS -->
+<section id="lessons" class="screen" hidden>
+  <div class="top"><h2 style="color:var(--teal)">Lessons</h2><button class="iconbtn" id="lessonsBack">Back</button></div>
+  <p class="muted" style="font-size:14px">✓ unlocked (passed): practise any time · ▶ your current lesson · 🔒 locked until you pass the quiz before it</p>
+  <div id="lessonList"></div>
+</section>
+
 <!-- SETTINGS -->
 <section id="settings" class="screen" hidden>
   <div class="top"><h2 style="color:var(--teal)">Voices & settings</h2><button class="iconbtn" id="setBack">Done</button></div>
@@ -198,12 +221,16 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <div class="row" style="align-items:center"><span id="nameNow" style="font-size:18px"></span><button class="btn ghost" id="nameChange" style="flex:0 0 auto;width:auto">Change</button></div>
     <p class="muted" style="font-size:14px;margin:10px 0 0">The coach uses your name when cheering you on.</p>
   </div>
-  <div class="card">
+  <div class="card" id="guVoiceCard" hidden>
+    <h3>Gujarati voice</h3>
+    <p class="muted" style="font-size:14px;margin:0">Gujarati is spoken by <b>Lekha</b>, the iPhone's Hindi voice, reading the Gujarati text.</p>
+  </div>
+  <div class="card" id="genderCard">
     <h3>Coach voice</h3>
     <div class="seg"><button data-gender="female">Female · Lola</button><button data-gender="male">Male · Leo</button></div>
     <p class="muted" style="font-size:14px;margin:10px 0 0">Conversation scenes use a voice of the other gender for the other person. Tap a voice to hear it.</p>
   </div>
-  <div class="card"><h3>Spanish voice</h3><div id="esVoices"></div>
+  <div class="card" id="esCard"><h3>Spanish voice</h3><div id="esVoices"></div>
     <div class="warn" id="voiceTip" hidden>For a much nicer voice, download a free <b>Enhanced</b> or <b>Premium</b> Spanish (Mexico) voice: iPhone <b>Settings → Accessibility → Spoken Content → Voices → Spanish</b>. Then reopen the app.</div>
     <div class="warn" id="noVoices" hidden>No voices loaded yet. Wait a moment or reopen this screen.</div>
   </div>
@@ -255,6 +282,7 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 <div id="toast" hidden></div>
 
 <script src="curriculum.js"></script>
+<script src="curriculum-gu.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
