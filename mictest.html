@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mic test</title>
+<style>
+body{font:17px/1.4 -apple-system,system-ui,sans-serif;margin:0;padding:20px;background:#fbf6ee;color:#1d2624}
+button{display:block;width:100%;padding:18px;margin:10px 0;border:0;border-radius:14px;font-size:18px;font-weight:600;color:#fff;background:#c8553d}
+button.b{background:#1f3b3a}
+#log{background:#fff;border:1px solid #e9dfd0;border-radius:12px;padding:12px;font:14px/1.5 ui-monospace,monospace;white-space:pre-wrap;min-height:200px}
+</style></head><body>
+<h2>Mic test</h2>
+<p>Tap each button in order. Then take a screenshot of this page and send it to Claude.</p>
+<button class="b" id="t1">1 · Speak a test phrase</button>
+<button id="t2">2 · Listen in Spanish (say "hola")</button>
+<button id="t3">3 · Listen in English (say "hello")</button>
+<div id="log"></div>
+<script>
+const L = m => { const d = new Date(); document.getElementById('log').textContent += d.toTimeString().slice(0,8) + '  ' + m + '\n'; };
+L('Browser: ' + navigator.userAgent.replace(/^Mozilla\/5.0 /,''));
+L('SpeechRecognition: ' + (window.SpeechRecognition ? 'yes' : 'no') + ' · webkitSpeechRecognition: ' + (window.webkitSpeechRecognition ? 'yes' : 'no'));
+L('speechSynthesis: ' + ('speechSynthesis' in window ? 'yes' : 'no') + ' · secure page: ' + window.isSecureContext);
+setTimeout(() => { try { const v = speechSynthesis.getVoices(); L('Voices: ' + v.length + ' total, Spanish: ' + v.filter(x => x.lang.startsWith('es')).map(x => x.name + ' ' + x.lang).join(', ')); } catch (e) { L('Voices error: ' + e); } }, 800);
+document.getElementById('t1').onclick = () => {
+  try { const u = new SpeechSynthesisUtterance('Hola, ¿cómo estás?'); u.lang = 'es-MX';
+    u.onstart = () => L('speak: started'); u.onend = () => L('speak: ended'); u.onerror = e => L('speak: ERROR ' + e.error);
+    speechSynthesis.cancel(); speechSynthesis.speak(u); L('speak: requested'); } catch (e) { L('speak exception: ' + e); }
+};
+function listen(lang) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { L('No speech recognition in this browser'); return; }
+  let r; try { r = new SR(); } catch (e) { L('create exception: ' + e); return; }
+  r.lang = lang; r.interimResults = true; r.maxAlternatives = 3; r.continuous = false;
+  ['start','audiostart','soundstart','speechstart','speechend','soundend','audioend','nomatch'].forEach(ev => r['on' + ev] = () => L(lang + ' ' + ev));
+  r.onresult = e => { const x = e.results[e.results.length - 1]; L(lang + ' result' + (x.isFinal ? ' (final)' : '') + ': "' + x[0].transcript + '"'); };
+  r.onerror = e => L(lang + ' ERROR: ' + e.error + (e.message ? ' ' + e.message : ''));
+  r.onend = () => L(lang + ' end');
+  try { r.start(); L(lang + ' start() called'); } catch (e) { L(lang + ' start exception: ' + e); }
+  setTimeout(() => { try { r.stop(); } catch (e) {} }, 8000);
+}
+document.getElementById('t2').onclick = () => listen('es-MX');
+document.getElementById('t3').onclick = () => listen('en-US');
+</script></body></html>
