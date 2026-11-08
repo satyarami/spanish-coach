@@ -2,8 +2,13 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.3.1';
+const APP_VERSION = '1.4.0';
 const CHANGELOG = [
+  { v: '1.4.0', date: '2026-11-08', items: [
+    'Better hearing: on-device listening is now told which phrases you are practising (always mixed with others), so "buenas tardes" is less often heard as unrelated words.',
+    'More forgiving of sound-alike spellings (b/v, s/z, silent h, ll/y).',
+    'Feedback report shows how often the listening hints were used.'
+  ] },
   { v: '1.3.1', date: '2026-11-08', items: [
     'Fix: Safari crash. The experimental GPU listening mode is now off by default.'
   ] },
@@ -109,7 +114,11 @@ function lev(a, b) {
   }
   return prev[n];
 }
-const sim = (a, b) => (!a && !b) ? 1 : 1 - lev(a, b) / Math.max(a.length, b.length);
+const sim0 = (a, b) => (!a && !b) ? 1 : 1 - lev(a, b) / Math.max(a.length, b.length);
+// Sound-alike spelling: the listener may write "v" for "b", "s" for "z", drop a silent "h", etc.
+const fold = s => s.replace(/ll/g, 'y').replace(/qu/g, 'k').replace(/c(?=[ei])/g, 's').replace(/c(?!h)/g, 'k')
+  .replace(/(^|[^c])h/g, '$1').replace(/v/g, 'b').replace(/z/g, 's').replace(/(.)\1+/g, '$1');
+const sim = (a, b) => Math.max(sim0(a, b), sim0(fold(a), fold(b)));
 // score heard alternatives against accepted answers; "…" = open tail
 function score(alts, answers) {
   let best = 0;
@@ -267,8 +276,24 @@ function asrProgress(f, total) {
   $('#asrBar').style.width = (f * 100) + '%';
 }
 async function asrWait() { asrStart(); if (asrReady || asrErr) return; await new Promise(r => asrWaiters.push(r)); }
-function transcribe(audio, language, maxTokens) {
-  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, maxTokens, model: ASR_MODEL, gpu: !!S.settings.gpu }, [audio.buffer]); });
+function transcribe(audio, language, maxTokens, prompt) {
+  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, maxTokens, prompt: prompt || '', model: ASR_MODEL, gpu: !!S.settings.gpu }, [audio.buffer]); });
+}
+// Phrases the learner is likely to say right now, used to steer on-device listening toward them.
+// The expected answer is always mixed in with other phrases from the lesson and review, never alone.
+const lessonKeys = li => Object.keys(ITEMS).filter(k => ITEMS[k].lesson === li);
+function hintFor(keys, extra = []) {
+  const out = [], seen = new Set();
+  const add = t => { t = String(t || '').replace(/\s*…\s*/g, ' ').trim(); const n = norm(t); if (n && !seen.has(n)) { seen.add(n); out.push(t); } };
+  extra.forEach(add);
+  const nx = out.length;
+  shuffle(keys).forEach(k => ITEMS[k] && add(ITEMS[k].say));
+  return shuffle(out.slice(0, Math.max(nx, 14))).concat(['Repite', 'No sé']).join('. ') + '.';
+}
+function hintRecall(k) {
+  const it = ITEMS[k]; if (!it) return '';
+  const st = S.session || {};
+  return hintFor([...lessonKeys(it.lesson), ...(st.today || []), ...shuffle(learnedKeys()).slice(0, 6)].filter(x => x !== k), [it.say]);
 }
 function setAudioSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
 function concatF32(arr) { let n = 0; arr.forEach(a => n += a.length); const o = new Float32Array(n); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; }
@@ -319,7 +344,7 @@ function engine() {
   return S.settings.autoEngine || (SR ? 'apple' : 'ondevice');
 }
 let lastAsrMs = 0;
-async function listenOnDevice(lang) {
+async function listenOnDevice(lang, hint) {
   if (!asrReady) {
     setOrb('think'); status('Getting the listening model ready (one time)…');
     await asrWait(); check();
@@ -336,9 +361,10 @@ async function listenOnDevice(lang) {
   }
   if (!rec.audio) return { alts: [], err: 'nospeech' };
   setOrb('think'); status('…');
-  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english', 40);
+  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english', 40, lang.startsWith('es') && S.settings.asrHints !== false ? hint : '');
   check();
   lastAsrMs = out.ms || 0;
+  S.auto.hinted = (S.auto.hinted || 0) + (out.prompted ? 1 : 0); S.auto.asrN = (S.auto.asrN || 0) + 1;
   S.auto.asr = S.auto.asr || []; S.auto.asr.push(out.ms || 0); if (S.auto.asr.length > 50) S.auto.asr.shift();
   return { alts: out.text ? [out.text] : [], err: out.error || null };
 }
@@ -360,13 +386,13 @@ function listenOnce(lang) {
     try { rec.start(); } catch (e) { ended = true; clearTimeout(t); run.rec = null; resolve({ alts: [], err: 'start-failed' }); }
   });
 }
-async function listen(lang = 'es-MX') {
+async function listen(lang = 'es-MX', hint = '') {
   check();
   await sleep(250);
   check();
   let res;
   if (engine() === 'ondevice') {
-    res = await listenOnDevice(lang);
+    res = await listenOnDevice(lang, hint);
   } else if (S.settings.tapToTalk) {
     setOrb('tap'); showTap(true); status('Tap the mic, then speak');
     // iPhone: recognition must start inside the tap itself, so the tap handler starts it.
@@ -383,9 +409,9 @@ async function listen(lang = 'es-MX') {
       // The iPhone refused its built-in speech service: switch to on-device listening for good.
       S.settings.autoEngine = 'ondevice'; S.settings.engine = 'auto'; S.settings.tapToTalk = false; save(); asrStart();
       toast('Switching to on-device listening');
-      setOrb('idle'); return listen(lang);
+      setOrb('idle'); return listen(lang, hint);
     }
-    if (!S.settings.tapToTalk && res.err === 'start-failed') { S.settings.tapToTalk = true; save(); setOrb('idle'); return listen(lang); }
+    if (!S.settings.tapToTalk && res.err === 'start-failed') { S.settings.tapToTalk = true; save(); setOrb('idle'); return listen(lang, hint); }
     pause(); alertBox('iPhone speech recognition is blocked (' + res.err + '). Switch Voices → Listening to "On-device", then tap Resume.'); check();
   }
   setOrb('idle');
@@ -494,8 +520,9 @@ async function stepTeach(k) {
   showText(it.say, it.en);
   await sleep(300);
   await say(it.say);
+  const hint = hintFor(lessonKeys(it.lesson).filter(x => x !== k), [it.say]);
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await listen();
+    const r = await listen('es-MX', hint);
     if (r.cmd === 'repeat') { await say(it.say, 0.75); attempt--; continue; }
     const s = score(r.alts, it.answers);
     if (s >= 0.6) { FX.good(); addXP(5); await cheer(true); break; }
@@ -512,8 +539,9 @@ async function recall(k, opts = {}) {
   const lead = opts.quiz ? '' : (sentFirstHint++ < 2 ? 'How do you say: ' : '');
   await en(lead + it.en);
   let tries = 0;
+  const hint = hintRecall(k);
   while (true) {
-    const r = await listen();
+    const r = await listen('es-MX', hint);
     if (r.cmd === 'repeat') { await en(it.en); continue; }
     if (!r.alts.length && tries++ < 1) { await en("Didn't catch that. " + it.en); continue; }
     const dunno = r.cmd === 'dunno';
@@ -532,7 +560,7 @@ async function recall(k, opts = {}) {
     if (opts.quiz) { await say(it.say); return false; }
     await en(s >= 0.5 ? praiseLine(NEAR) + ' Listen.' : (dunno ? 'No problem. It is:' : 'Good try. It is:'));
     await say(it.say, 0.8);
-    const r2 = await listen();
+    const r2 = await listen('es-MX', hint);
     if (score(r2.alts, it.answers) >= 0.6) { FX.good(); await cheer(true); }
     return false;
   }
@@ -551,8 +579,9 @@ async function stepScene(st) {
   clearText();
   await en(cue);
   if (st.pass === 1 && model) { await say(model, 0.8); }
+  const hint = hintFor(lessonKeys(st.li), answers);
   for (let a = 0; a < 2; a++) {
-    const r = await listen();
+    const r = await listen('es-MX', hint);
     if (r.cmd === 'repeat') { await en(cue); a--; continue; }
     const s = score(r.alts, answers);
     showText(answers[0], cue);
@@ -792,6 +821,7 @@ function feedbackReport() {
   const miss = Object.entries(S.auto.misses).sort((a, b) => b[1] - a[1]).slice(0, 15);
   lines.push('Most-missed phrases: ' + (miss.length ? miss.map(([k, n]) => '"' + ITEMS[k].say + '" ×' + n).join(', ') : 'none'));
   lines.push('Times nothing was heard: ' + S.auto.unheard);
+  if (S.auto.asrN) lines.push('Listening hints used: ' + (S.auto.hinted || 0) + ' of ' + S.auto.asrN + ' on-device answers');
   if (S.auto.asr && S.auto.asr.length) { const a = S.auto.asr.slice().sort((x, y) => x - y); lines.push('On-device recognition time (' + asrDevice + '): median ' + (a[a.length >> 1] / 1000).toFixed(1) + ' s, slowest ' + (a[a.length - 1] / 1000).toFixed(1) + ' s over ' + a.length + ' answers'); }
   const mh = S.auto.mishear.slice(-15);
   lines.push('Recent mishearings: ' + (mh.length ? mh.map(m => '"' + (ITEMS[m.k] ? ITEMS[m.k].say : m.k) + '" heard as "' + m.heard + '"').join('; ') : 'none'));
