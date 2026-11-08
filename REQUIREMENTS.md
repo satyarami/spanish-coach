@@ -116,7 +116,7 @@ You can give feedback at any moment by voice. The app collects it and sends it t
 
 1. **Speak feedback anytime:** tap the feedback button or say "comentario". You speak in English, or type or use keyboard dictation, and the app saves the note with the lesson, phrase and time.
 2. **Automatic notes:** the app also logs phrases you keep missing, words the listener keeps mishearing, and sessions that ran long or short.
-3. **Send it:** "Send feedback" opens the iPhone share sheet with everything collected. You share it into this Claude chat, or to email or Notes.
+3. **Send it:** "Send feedback" opens a pre-filled GitHub page with everything collected, and one tap on Submit sends it. An automation saves it in the repository's feedback folder as feedback/01.md to feedback/10.md. Only the latest 10 are kept: the 11th replaces the oldest, and so on. Everyone's feedback is handled the same way, and senders need a GitHub account. The share sheet remains as a backup.
 4. **I improve the app:** I publish a new version at the same link, list your items in "What's new", and keep the previous version available for rollback.
 5. **This doc is the source of truth.** Edit it or comment here whenever your requirements change, and I build to the current text. It is mirrored to REQUIREMENTS.md in the GitHub repository, and every requirements change is pushed there automatically.
 

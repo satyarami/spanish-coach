@@ -1,0 +1,48 @@
+name: Save app feedback
+# Turns a "[feedback] ..." issue into feedback/NN.md, keeping only the latest 10 (01..10, oldest replaced).
+on:
+  issues:
+    types: [opened]
+permissions:
+  contents: write
+  issues: write
+concurrency:
+  group: feedback
+  cancel-in-progress: false
+jobs:
+  save:
+    if: startsWith(github.event.issue.title, '[feedback]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write feedback/NN.md
+        env:
+          TITLE: ${{ github.event.issue.title }}
+          BODY: ${{ github.event.issue.body }}
+          AUTHOR: ${{ github.event.issue.user.login }}
+          NUM: ${{ github.event.issue.number }}
+          CREATED: ${{ github.event.issue.created_at }}
+        run: |
+          mkdir -p feedback
+          n=$(cat feedback/.next 2>/dev/null || echo 1)
+          case "$n" in ''|*[!0-9]*) n=1;; esac
+          f=$(printf "feedback/%02d.md" "$n")
+          {
+            echo "# ${TITLE#\[feedback\] }"
+            echo
+            echo "- From: $AUTHOR"
+            echo "- Date: $CREATED"
+            echo "- Issue: #$NUM"
+            echo
+            printf '%s\n' "$BODY"
+          } > "$f"
+          echo $(( n % 10 + 1 )) > feedback/.next
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add feedback
+          git commit -m "Feedback #$NUM saved as $f"
+          for i in 1 2 3; do git pull --rebase -q && git push -q && break; sleep 3; done
+      - name: Close the issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close "${{ github.event.issue.number }}" -R "${{ github.repository }}" -c "Saved to the feedback folder. Thank you!"
