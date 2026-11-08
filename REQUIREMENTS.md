@@ -63,6 +63,16 @@ You pick a female or male voice, and each voice has a preview button before you 
 - **Pleasant sound:** the app prefers the iPhone's "Enhanced" and "Premium" voices, which are much more natural than the defaults. They are a free download in the iPhone's Accessibility settings under Spoken Content → Voices. The voice must sound natural, not monotone or robotic. If only the basic voices are installed, the home screen shows how to download the better ones.
 - **Speed:** a slow, normal or fast slider applies to all Spanish speech.
 
+## Your name
+
+The coach asks your name once and uses it from then on.
+
+- **Asked once:** at the start of the first session, the coach asks "What's your name?". You say it, or type it if the listener gets it wrong. It is saved on the phone with your progress and never asked again.
+- **Pronunciation check:** the coach says "¡Hola, <name>!" in the Spanish voice and asks whether that sounded right. Say or tap yes or no. If no, you type your name the way it sounds (for example "Sah-tee-ah") and it tries again, until you say yes. The written name stays as you spelled it; the sounds-like spelling is used only for speech.
+- **Every cheer uses your name:** "¡Muy bien, Satya!", "¡Cinco seguidas! ¡Increíble, Satya!", "¡Felicidades, Satya!", and the lesson greeting "¡Hola, Satya!".
+- **Change it any time:** Settings → Your name → Change runs the same ask-and-check again.
+- **Each person their own:** the name is stored per phone, so each family member using the link gets their own name and progress.
+
 ## Curriculum and 6-month plan
 
 The 6 months are split into four phases of about 6 weeks each. Every sixth session is a review-and-conversation day with no new material.
@@ -82,11 +92,9 @@ The 6 months are split into four phases of about 6 weeks each. Every sixth sessi
 
 The app should feel like a game with a story, not a drill.
 
-**Your name:** on first use the coach asks your name by voice. Before saving it, the coach says it back the way the Spanish voice will pronounce it and asks whether that's right. If you say no, you say it again slowly, the way it sounds, and the coach tries again, up to 3 times. You can redo it anytime under Voices → Your name.
-
 - **A running story:** the lessons follow a trip from Mexico City to Oaxaca and on to the coast. Each scene is a new place with new characters.
 - **A coach character:** Lola, a warm and playful host who cheers in Spanish ("¡Eso es!", "¡Qué bien!").
-- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds. Every correct answer gets spoken praise that uses your name ("¡Muy bien, Satya!"), with varied cheers and bigger celebrations at 3, 5 and 10 in a row. Misses get kind wording ("Good try", "Casi").
+- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds. Every correct answer gets spoken praise that includes your name, with varied cheers and bigger celebrations at 3, 5 and 10 in a row. Misses get kind wording ("Good try", "Casi").
 - **Daily streak:** a pass extends your streak, which shows on the home screen.
 - **Levels:** Turista → Viajero → Conversador → Experto, each with a short celebration.
 - **Sounds:** a short fanfare when you pass a quiz, and soft chimes for right answers. There are no harsh buzzers.
@@ -95,7 +103,7 @@ The app should feel like a game with a story, not a drill.
 
 Progress is saved after every answer, and you can continue exactly where you left off, even in the middle of a session.
 
-- **What is saved:** the current lesson, the session part and question you were on, the time already spent, your quiz history, spaced-repetition data for every phrase, points, streak and settings.
+- **What is saved:** your name and how to say it, the current lesson, the session part and question you were on, the time already spent, your quiz history, spaced-repetition data for every phrase, points, streak and settings.
 - **Resume:** if you close the app mid-session, the home screen offers "Continue session (14 min done)" or "Restart this lesson".
 - **Where it is stored:** on your iPhone, inside the app. All versions of the app share the same progress, so updating or rolling back loses nothing.
 - **Safety:** use the app from its Home Screen icon. Plain Safari can clear data from websites you haven't opened for several days. A "Back up progress" button saves a backup file through the iPhone share sheet, for example to Files or Notes, and "Restore" reads it back.
