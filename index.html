@@ -70,7 +70,9 @@ button{font:inherit;cursor:pointer;border:0}
 @keyframes pulse{50%{transform:scale(1.06)}}
 @keyframes ring{from{transform:scale(.9);opacity:1}to{transform:scale(1.25);opacity:0}}
 .orbLabel{font-size:14px;color:var(--muted);min-height:20px}
-#es{font-family:Fraunces,Georgia,serif;font-size:30px;line-height:1.2;color:var(--ink);min-height:36px}
+#es{font-family:Fraunces,Georgia,serif;font-size:30px;line-height:1.2;color:var(--ink);min-height:36px;white-space:pre-line}
+.langpick{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-weight:600;color:var(--teal)}
+.langpick select{flex:1;font:inherit;font-weight:600;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
 #en{color:var(--muted);min-height:22px}
 #combo{font-family:Fraunces,serif;color:var(--terra);font-size:22px;min-height:28px}
 #tapBtn{position:fixed;left:50%;bottom:calc(170px + env(safe-area-inset-bottom));transform:translateX(-50%);width:220px;padding:20px;border-radius:999px;background:var(--gold);color:var(--ink);font-weight:700;font-size:18px;box-shadow:0 8px 24px #0002}
@@ -126,6 +128,9 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
       <button class="iconbtn" id="settingsBtn">Voices</button>
     </div>
   </div>
+  <label class="langpick">Learning
+    <select id="langSel"><option value="es">Español · Spanish</option><option value="gu">ગુજરાતી · Gujarati</option></select>
+  </label>
   <div class="hero">
     <div class="num" id="nextNum"></div>
     <h2 id="nextTitle"></h2>
@@ -216,12 +221,16 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <div class="row" style="align-items:center"><span id="nameNow" style="font-size:18px"></span><button class="btn ghost" id="nameChange" style="flex:0 0 auto;width:auto">Change</button></div>
     <p class="muted" style="font-size:14px;margin:10px 0 0">The coach uses your name when cheering you on.</p>
   </div>
-  <div class="card">
+  <div class="card" id="guVoiceCard" hidden>
+    <h3>Gujarati voice</h3>
+    <p class="muted" style="font-size:14px;margin:0">Gujarati is spoken by <b>Lekha</b>, the iPhone's Hindi voice, reading the Gujarati text.</p>
+  </div>
+  <div class="card" id="genderCard">
     <h3>Coach voice</h3>
     <div class="seg"><button data-gender="female">Female · Lola</button><button data-gender="male">Male · Leo</button></div>
     <p class="muted" style="font-size:14px;margin:10px 0 0">Conversation scenes use a voice of the other gender for the other person. Tap a voice to hear it.</p>
   </div>
-  <div class="card"><h3>Spanish voice</h3><div id="esVoices"></div>
+  <div class="card" id="esCard"><h3>Spanish voice</h3><div id="esVoices"></div>
     <div class="warn" id="voiceTip" hidden>For a much nicer voice, download a free <b>Enhanced</b> or <b>Premium</b> Spanish (Mexico) voice: iPhone <b>Settings → Accessibility → Spoken Content → Voices → Spanish</b>. Then reopen the app.</div>
     <div class="warn" id="noVoices" hidden>No voices loaded yet. Wait a moment or reopen this screen.</div>
   </div>
@@ -273,6 +282,7 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 <div id="toast" hidden></div>
 
 <script src="curriculum.js"></script>
+<script src="curriculum-gu.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
