@@ -2,7 +2,7 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.1';
 const CHANGELOG = [
   { v: '1.0.0', date: '2026-11-08', items: [
     'First release: 30 lessons and 6 review days (Phase 1 and the start of Phase 2), set on a trip through Mexico.',
@@ -206,6 +206,7 @@ const en = t => speak(t, 'en');
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function listenOnce(lang) {
   return new Promise(resolve => {
+    if (run.tapCancel) { run.tapCancel = false; resolve({ alts: [], err: 'cancelled' }); return; }
     let alts = [], err = null, ended = false;
     let rec;
     try { rec = new SR(); } catch (e) { resolve({ alts: [], err: 'unsupported' }); return; }
@@ -225,17 +226,19 @@ async function listen(lang = 'es-MX') {
   check();
   let res;
   if (S.settings.tapToTalk) {
-    setOrb('tap'); showTap(true);
-    await new Promise(r => { run.tapResolve = r; });
-    showTap(false); check();
-    res = await listenOnce(lang);          // started from the tap handler path
+    setOrb('tap'); showTap(true); status('Tap the mic, then speak');
+    // iPhone: recognition must start inside the tap itself, so the tap handler starts it.
+    const p = await new Promise(r => { run.tapResolve = () => r(listenOnce(lang)); });
+    showTap(false); setOrb('listen'); status('Listening…');
+    res = await p;
+    check();
     if (res.err === 'not-allowed' || res.err === 'service-not-allowed') {
       pause();
       alertBox('The app is not allowed to use the microphone. On iPhone: Settings → Apps → Safari → Microphone → Allow, and make sure Siri & Dictation is on. Then tap Resume.');
       check();
     }
   } else {
-    setOrb('listen'); FX.listen();
+    setOrb('listen'); FX.listen(); status('Listening…');
     res = await listenOnce(lang);
     if (['not-allowed', 'service-not-allowed', 'start-failed'].includes(res.err) && !run.paused && !run.quit) {
       // iPhone may need a tap to start listening: switch to tap-to-talk
@@ -243,7 +246,9 @@ async function listen(lang = 'es-MX') {
       setOrb('idle'); return listen(lang);
     }
   }
-  setOrb('idle'); check();
+  setOrb('idle');
+  status(res.alts.length ? 'Heard: “' + res.alts[0] + '”' : (res.err && res.err !== 'timeout' ? 'Mic problem: ' + res.err : 'Didn’t hear anything'));
+  check();
   const c = command(res.alts);
   if (c === 'pause') { pause(); check(); }
   if (c === 'feedback') { openFeedback(); throw PAUSED; }
@@ -255,6 +260,7 @@ async function listen(lang = 'es-MX') {
 function show(id) { document.querySelectorAll('.screen').forEach(s => s.hidden = s.id !== id); }
 function setOrb(state) { const o = $('#orb'); if (o) o.dataset.state = state; }
 function showTap(on) { $('#tapBtn').hidden = !on; }
+function status(t) { const e = $('#status'); if (e) e.textContent = t || ''; }
 function setPhase(label) { $('#phase').textContent = label; }
 function showText(es, enText) {
   if (S.settings.earsOnly) { $('#es').textContent = ''; $('#en').textContent = ''; return; }
@@ -545,7 +551,7 @@ function pause() {
   run.paused = true;
   try { speechSynthesis.cancel(); } catch (e) {}
   if (run.rec) try { run.rec.abort(); } catch (e) {}
-  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; r(); }
+  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
   $('#pauseOverlay').hidden = false; $('#pauseBtn').textContent = 'Resume';
   save();
 }
@@ -559,7 +565,7 @@ function quitSession() {
   run.quit = true;
   try { speechSynthesis.cancel(); } catch (e) {}
   if (run.rec) try { run.rec.abort(); } catch (e) {}
-  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; r(); }
+  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
   if (run.paused) { run.paused = false; if (run.resume) { const r = run.resume; run.resume = null; r(); } }
   if (!run.active) { renderHome(); show('home'); }
 }
@@ -740,7 +746,8 @@ function init() {
   $('#pauseBtn').onclick = () => run.paused ? resume() : pause();
   $('#resumeBig').onclick = resume;
   $('#homeBtn').onclick = () => { quitSession(); };
-  $('#tapBtn').onclick = () => { unlockAudio(); if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; r(); } };
+  const tapMic = () => { if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; r(); ac(); } };
+  $('#tapBtn').onclick = tapMic; $('#orb').onclick = tapMic;
   $('#sessFb').onclick = openFeedback;
   $('#homeFb').onclick = openFeedback;
   $('#fbMic').onclick = fbRecord;

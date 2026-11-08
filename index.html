@@ -64,7 +64,8 @@ button{font:inherit;cursor:pointer;border:0}
 #orb[data-state=speak]{animation:pulse 1.1s ease-in-out infinite}
 #orb[data-state=listen]{background:radial-gradient(circle at 35% 30%,#e27a62,var(--terra))}
 #orb[data-state=listen]::after{border-color:#c8553d66;animation:ring 1.2s ease-out infinite}
-#orb[data-state=tap]{background:radial-gradient(circle at 35% 30%,#f6c27a,var(--gold))}
+#orb[data-state=tap]{background:radial-gradient(circle at 35% 30%,#f6c27a,var(--gold));cursor:pointer}
+#orb[data-state=tap]::before{content:"🎙";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:72px}
 @keyframes pulse{50%{transform:scale(1.06)}}
 @keyframes ring{from{transform:scale(.9);opacity:1}to{transform:scale(1.25);opacity:0}}
 .orbLabel{font-size:14px;color:var(--muted);min-height:20px}
@@ -147,11 +148,12 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   <div id="phase"></div>
   <div class="stage">
     <div id="orb" data-state="idle"></div>
+    <div class="orbLabel" id="status"></div>
     <div id="combo"></div>
     <div id="es"></div>
     <div id="en"></div>
   </div>
-  <button id="tapBtn" hidden>🎙 Tap, then speak</button>
+  <button id="tapBtn" hidden>🎙 Tap here, then speak</button>
   <div class="controls"><div class="row">
     <button class="btn ghost" id="homeBtn">Home</button>
     <button class="btn ghost" id="sessFb">Feedback</button>
