@@ -48,7 +48,7 @@ A failed quiz loops through a short review of the missed phrases and a fresh qui
 All teaching happens by speech. There is no typing anywhere, and taps are limited to Start, Pause and Settings.
 
 - **The app speaks** every instruction in English and every Spanish model phrase. Slow and normal speeds are available.
-- **You answer aloud.** The app starts listening automatically after each prompt, so it works hands-free. If the iPhone requires a tap before listening, a large mic button appears.
+- **You answer aloud.** The app starts listening automatically after each prompt, so it works hands-free. If the iPhone blocks its built-in speech service, the app switches by itself to on-device listening (Whisper). That needs a one-time download of about 75 MB, stays hands-free, and detects when you start and stop talking.
 - **Scoring is forgiving on accent but checks the words.** A near miss gets "Almost, listen again". The app replays the phrase and you retry.
 - **Voice commands:** say "repite" or "otra vez" to replay, "no sé" to hear the answer, and "pausa" to pause.
 - **Very little reading:** the screen shows a large speaking or listening indicator. Spanish text appears only after you answer, as a memory aid. An "Ears only" setting hides all text.
@@ -60,7 +60,7 @@ You pick a female or male voice, and each voice has a preview button before you 
 - **Spanish teacher voice:** female or male. The list shows every Spanish voice on your iPhone, labelled female or male, and plays "Hola, ¿cómo estás?" as a preview.
 - **English instruction voice:** chosen separately, also female or male.
 - **Conversation scenes** use a second voice of the other gender for the other characters, so dialogues sound like two real people.
-- **Pleasant sound:** the app prefers the iPhone's "Enhanced" and "Premium" voices, which are much more natural than the defaults. They are a free download in the iPhone's Accessibility settings under Spoken Content → Voices. On first launch the app tells you once how to get them.
+- **Pleasant sound:** the app prefers the iPhone's "Enhanced" and "Premium" voices, which are much more natural than the defaults. They are a free download in the iPhone's Accessibility settings under Spoken Content → Voices. The voice must sound natural, not monotone or robotic. If only the basic voices are installed, the home screen shows how to download the better ones.
 - **Speed:** a slow, normal or fast slider applies to all Spanish speech.
 
 ## Curriculum and 6-month plan
@@ -84,7 +84,7 @@ The app should feel like a game with a story, not a drill.
 
 - **A running story:** the lessons follow a trip from Mexico City to Oaxaca and on to the coast. Each scene is a new place with new characters.
 - **A coach character:** Lola, a warm and playful host who cheers in Spanish ("¡Eso es!", "¡Qué bien!").
-- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds.
+- **Points and combos:** each correct answer earns points. Correct answers in a row build a combo with rising chime sounds. Every correct answer gets spoken praise, with varied cheers and bigger celebrations at 3, 5 and 10 in a row. Misses get kind wording ("Good try", "Casi").
 - **Daily streak:** a pass extends your streak, which shows on the home screen.
 - **Levels:** Turista → Viajero → Conversador → Experto, each with a short celebration.
 - **Sounds:** a short fanfare when you pass a quiz, and soft chimes for right answers. There are no harsh buzzers.
@@ -107,14 +107,14 @@ The app is an iPhone web app hosted on GitHub Pages at one permanent link. Every
 - **Permanent link:** https://satyarami.github.io/spanish-coach/. It always serves the current version.
 - **Versions:** each release is numbered (v1, v2, …) and listed on a "What's new" screen. The previous version stays live at the same link plus `/previous/`, and Settings has a button to switch to it.
 - **Rollback:** tell me "roll back" and the previous version becomes current again. Git keeps every older version, so any of them can be restored.
-- **Seeing it first:** each new version shows its "What's new" summary on first open, and you can try the previous version side by side.
+- **Seeing it first:** each new version shows its "What's new" summary on first open, and you can try the previous version side by side. New builds go to a separate preview link first. Nothing reaches the main branch or the permanent link until you've tried it and approved it.
 - **One-time setup:** done. GitHub is connected and the repository is satyarami/spanish-coach.
 
 ## Feedback loop
 
 You can give feedback at any moment by voice. The app collects it and sends it to me, and the next version addresses it.
 
-1. **Speak feedback anytime:** tap the feedback button or say "comentario". You speak in English, and the app saves what you said with the lesson, phrase and time.
+1. **Speak feedback anytime:** tap the feedback button or say "comentario". You speak in English, or type or use keyboard dictation, and the app saves the note with the lesson, phrase and time.
 2. **Automatic notes:** the app also logs phrases you keep missing, words the listener keeps mishearing, and sessions that ran long or short.
 3. **Send it:** "Send feedback" opens the iPhone share sheet with everything collected. You share it into this Claude chat, or to email or Notes.
 4. **I improve the app:** I publish a new version at the same link, list your items in "What's new", and keep the previous version available for rollback.
