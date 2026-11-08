@@ -43,7 +43,7 @@ A failed quiz loops through a short review of the missed phrases and a fresh qui
 - After each quiz answer, the app says the correct Spanish so the quiz also teaches.
 - The timer counts only active time. Pausing stops the clock.
 - **Rewind and fast forward:** ⏪ 30s and 30s ⏩ buttons during a session jump back or ahead by about 30 seconds of teaching. Rewind uses the actual time each step started. Neither works inside the quiz. Fast forward during the lightning round goes straight to the quiz.
-- **Lessons menu:** the home screen lists every session. Passed lessons (✓) can be replayed as practice; this never changes your current place, and passing again doesn't skip you ahead. The current lesson (▶) continues exactly where you left off. Lessons whose quiz you haven't passed are locked (🔒) and can't be opened.
+- **Lessons menu:** the home screen lists every session. Passed lessons (✓) can be replayed as practice; this never changes your current place, and passing again doesn't skip you ahead. The current lesson (▶) continues exactly where you left off. Completed lessons are shown as unlocked. Lessons whose quiz you haven't passed still appear in the menu, marked locked (🔒), but can't be opened.
 
 ## Voice-only interaction
 
