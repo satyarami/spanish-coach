@@ -13,6 +13,7 @@ button.b{background:#1f3b3a}
 <button id="t2">2 · Listen in Spanish (say "hola")</button>
 <button id="t3">3 · Listen in English (say "hello")</button>
 <button class="b" id="t4">4 · Gujarati check: list voices and speak</button>
+<button id="t5">5 · Gujarati read by the Hindi voice (Lekha)</button>
 <div id="log"></div>
 <script>
 const L = m => { const d = new Date(); document.getElementById('log').textContent += d.toTimeString().slice(0,8) + '  ' + m + '\n'; };
@@ -52,6 +53,15 @@ document.getElementById('t4').onclick = () => {
       speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) { L('gu speak exception ' + e); }
   };
   go();
+};
+const guToDeva = t => t.replace(/[઀-૿]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x180));
+document.getElementById('t5').onclick = () => {
+  const lines = ['કેમ છો? હું મજામાં છું.', 'મારું નામ સત્ય છે.', 'મને ગુજરાતી શીખવું છે.', 'આવજો!'];
+  const v = speechSynthesis.getVoices().find(x => /^hi/i.test(x.lang));
+  L('Hindi voice: ' + (v ? v.name : 'not found'));
+  speechSynthesis.cancel();
+  lines.forEach((g, i) => { const d = guToDeva(g); const u = new SpeechSynthesisUtterance(d); u.lang = 'hi-IN'; if (v) u.voice = v; u.rate = 0.9;
+    u.onstart = () => L('speaking ' + (i + 1) + ': ' + g + '  →  ' + d); speechSynthesis.speak(u); });
 };
 document.getElementById('t2').onclick = () => listen('es-MX');
 document.getElementById('t3').onclick = () => listen('en-US');
