@@ -103,6 +103,8 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 .modal{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-end;justify-content:center;z-index:30}
 .sheet{background:var(--paper);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
 .sheet h3{font-size:15px;margin:14px 0 4px;color:var(--teal)}
+.nl{display:block;font-weight:600;margin:4px 0 6px}
+.ni{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);font:18px Inter,system-ui,sans-serif;box-sizing:border-box;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -164,6 +166,17 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <div class="progress"><div id="asrBar"></div></div>
     <div class="muted" style="font-size:13px">One time only. After this it's stored on your phone.</div>
   </div>
+  <div class="card" id="namePanel" hidden style="margin-bottom:110px">
+    <label class="nl" for="nameIn">Your name</label>
+    <input id="nameIn" class="ni" autocomplete="given-name" autocapitalize="words" placeholder="Say it, or type it here">
+    <div id="sayRow" hidden>
+      <label class="nl" for="sayIn">Spell it the way it sounds</label>
+      <input id="sayIn" class="ni" autocapitalize="words" placeholder="e.g. Sah-tee-ah">
+      <div class="muted" style="font-size:13px;margin-top:6px">Only changes how the coach says it. Your name stays as written above.</div>
+    </div>
+    <div class="row" id="nameAsk" style="margin-top:12px"><button class="btn" id="nameGo">Continue</button></div>
+    <div class="row" id="nameConfirm" hidden style="margin-top:12px"><button class="btn ghost" id="nameNo">No, fix it</button><button class="btn" id="nameYes">Yes, that's right</button></div>
+  </div>
   <button id="tapBtn" hidden>🎙 Tap here, then speak</button>
   <div class="controls"><div class="row">
     <button class="btn ghost" id="homeBtn">Home</button>
@@ -180,6 +193,11 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 <!-- SETTINGS -->
 <section id="settings" class="screen" hidden>
   <div class="top"><h2 style="color:var(--teal)">Voices & settings</h2><button class="iconbtn" id="setBack">Done</button></div>
+  <div class="card">
+    <h3>Your name</h3>
+    <div class="row" style="align-items:center"><span id="nameNow" style="font-size:18px"></span><button class="btn ghost" id="nameChange" style="flex:0 0 auto;width:auto">Change</button></div>
+    <p class="muted" style="font-size:14px;margin:10px 0 0">The coach uses your name when cheering you on.</p>
+  </div>
   <div class="card">
     <h3>Coach voice</h3>
     <div class="seg"><button data-gender="female">Female · Lola</button><button data-gender="male">Male · Leo</button></div>
