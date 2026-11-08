@@ -205,6 +205,11 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   <div id="fbStatus" class="muted" style="text-align:center"></div>
   <div id="fbHeard"></div>
   <div class="card">
+    <h3>Or type it</h3>
+    <textarea id="fbText" placeholder="Type here, or tap the keyboard's mic key to dictate" style="height:110px;font:16px/1.4 Inter,system-ui,sans-serif"></textarea>
+    <button class="btn" id="fbSave" style="margin-top:8px">Save note</button>
+  </div>
+  <div class="card">
     <h3 id="fbCount"></h3>
     <ul id="fbList"></ul>
     <button class="btn" id="fbSend">Send to Claude</button>

@@ -7,7 +7,8 @@ const CHANGELOG = [
   { v: '1.1.0', date: '2026-11-08', items: [
     'New on-device listening (Whisper). It works even when the iPhone blocks Safari speech recognition, and it is hands-free: it hears when you start and stop talking.',
     'One-time download of the listening model (about 75 MB), then it is cached on your phone.',
-    'Status line under the circle shows what the app heard.'
+    'Status line under the circle shows what the app heard.',
+    'Feedback: you can also type a note, or dictate it with the keyboard mic.'
   ] },
   { v: '1.0.0', date: '2026-11-08', items: [
     'First release: 30 lessons and 6 review days (Phase 1 and the start of Phase 2), set on a trip through Mexico.',
@@ -876,6 +877,7 @@ function init() {
   $('#homeFb').onclick = openFeedback;
   $('#fbMic').onclick = fbRecord;
   $('#fbSend').onclick = sendFeedback;
+  $('#fbSave').onclick = () => { const t = $('#fbText').value.trim(); if (!t) return; S.feedback.push({ at: new Date().toISOString(), v: APP_VERSION, where: fbContext(), text: t }); save(); $('#fbText').value = ''; renderFeedbackList(); renderHome(); toast('Note saved'); };
   $('#fbClear').onclick = () => { if ($('#fbClear').dataset.arm) { S.feedback = []; S.auto = DEFAULT().auto; save(); renderFeedbackList(); delete $('#fbClear').dataset.arm; $('#fbClear').textContent = 'Clear sent notes'; } else { $('#fbClear').dataset.arm = 1; $('#fbClear').textContent = 'Tap again to clear'; } };
   $('#settingsBtn').onclick = () => { renderSettings(); show('settings'); };
   $('#setBack').onclick = () => { renderHome(); show('home'); };
