@@ -2,8 +2,14 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.2.1';
+const APP_VERSION = '1.3.0';
 const CHANGELOG = [
+  { v: '1.3.0', date: '2026-11-08', items: [
+    'Faster listening: the speech model runs on the iPhone graphics chip when available (one-time extra download).',
+    'Responds sooner after you stop talking, with a soft tick when it has heard you.',
+    'Better at noticing softer speech, so fewer repeats.',
+    'The status line shows how long recognition took.'
+  ] },
   { v: '1.2.1', date: '2026-11-08', items: [
     'Fix: when the iPhone blocks its speech service, the app always switches to on-device listening by itself.'
   ] },
@@ -153,6 +159,7 @@ const FX = {
   good(combo = 0) { const b = 660 * Math.pow(2, Math.min(combo, 8) / 12); tone(b, 0, 0.25); tone(b * 1.5, 0.08, 0.3, 0.08); },
   soft() { tone(330, 0, 0.25, 0.08, 'triangle'); },
   listen() { tone(880, 0, 0.12, 0.06); },
+  tick() { tone(1320, 0, 0.06, 0.05); },
   fanfare() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i * 0.14, 0.4, 0.12, 'triangle')); tone(1047, 0.6, 0.9, 0.1); },
   level() { [392, 523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.1, 0.35, 0.1)); }
 };
@@ -234,7 +241,7 @@ async function cheer(quick) {
 
 // ---------- on-device speech recognition (Whisper) ----------
 const ASR_MODEL = 'onnx-community/whisper-base', ASR_DTYPE = 'q8';
-let asrW = null, asrReady = false, asrErr = null, asrWaiters = [], asrSeq = 0, asrPending = {};
+let asrDevice = '', asrW = null, asrReady = false, asrErr = null, asrWaiters = [], asrSeq = 0, asrPending = {};
 function asrStart() {
   if (asrW || asrReady) return;
   asrErr = null;
@@ -243,12 +250,12 @@ function asrStart() {
   asrW.onmessage = e => {
     const m = e.data;
     if (m.type === 'progress') { if (m.file && m.total) files[m.file] = [m.loaded || 0, m.total]; let l = 0, t = 0; Object.values(files).forEach(([a, b]) => { l += a; t += b; }); asrProgress(t ? l / t : 0, t); }
-    else if (m.type === 'ready') { asrReady = true; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
+    else if (m.type === 'ready') { asrReady = true; asrDevice = m.device || ''; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
     else if (m.type === 'error') { asrErr = m.error; asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
     else if (m.type === 'result') { const r = asrPending[m.id]; delete asrPending[m.id]; if (r) r(m); }
   };
   asrW.onerror = e => { asrErr = 'worker error ' + (e.message || ''); asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); };
-  asrW.postMessage({ type: 'load', model: ASR_MODEL, dtype: ASR_DTYPE });
+  asrW.postMessage({ type: 'load', model: ASR_MODEL });
 }
 function asrProgress(f, total) {
   const el = $('#asrLoad'); if (!el) return;
@@ -257,8 +264,8 @@ function asrProgress(f, total) {
   $('#asrBar').style.width = (f * 100) + '%';
 }
 async function asrWait() { asrStart(); if (asrReady || asrErr) return; await new Promise(r => asrWaiters.push(r)); }
-function transcribe(audio, language) {
-  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, model: ASR_MODEL, dtype: ASR_DTYPE }, [audio.buffer]); });
+function transcribe(audio, language, maxTokens) {
+  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, maxTokens, model: ASR_MODEL }, [audio.buffer]); });
 }
 function setAudioSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
 function concatF32(arr) { let n = 0; arr.forEach(a => n += a.length); const o = new Float32Array(n); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; }
@@ -270,7 +277,7 @@ function resample(x, from, to) {
 }
 // Records one spoken answer: waits for speech, stops after a pause. Returns {audio: Float32Array@16k | null, err?}
 async function recordUtterance(o = {}) {
-  const maxMs = o.maxMs || 9000, endSil = o.silenceMs || 850, noSpeech = o.noSpeechMs || 7000;
+  const maxMs = o.maxMs || 9000, endSil = o.silenceMs || 650, noSpeech = o.noSpeechMs || 8000;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return { audio: null, err: 'mic-unsupported' };
   let stream;
   try { setAudioSession('play-and-record'); stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); }
@@ -290,12 +297,13 @@ async function recordUtterance(o = {}) {
     proc.onaudioprocess = e => {
       const d = new Float32Array(e.inputBuffer.getChannelData(0)); chunks.push(d); t += chunkMs;
       let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i]; const rms = Math.sqrt(s / d.length);
-      if (floor === null) floor = rms; else if (speechStart < 0) floor = floor * 0.85 + rms * 0.15;
-      const thr = Math.max(0.01, floor * 2.5);
-      if (t > 150 && rms > thr) { if (speechStart < 0) speechStart = chunks.length - 1; lastVoice = t; voicedMs += chunkMs; }
+      // Background level: lowest recent level before speech (ignores the app's own voice echo).
+      if (speechStart < 0) floor = floor === null ? rms : Math.min(floor * 1.03 + 0.0002, Math.max(rms, floor * 0.9));
+      const thr = Math.min(0.03, Math.max(0.006, floor * 2.2));
+      if (t > 120 && rms > thr) { if (speechStart < 0) speechStart = chunks.length - 1; lastVoice = t; voicedMs += chunkMs; }
       if (o.onLevel) o.onLevel(rms);
       if (speechStart < 0 && t > noSpeech) finish('nospeech');
-      else if (speechStart >= 0 && t - lastVoice > endSil && voicedMs >= 150) finish('end');
+      else if (speechStart >= 0 && t - lastVoice > endSil && voicedMs >= 150) { if (o.onEnd) o.onEnd(); finish('end'); }
       else if (t > maxMs) finish('max');
     };
     src.connect(proc); proc.connect(ctx.destination);
@@ -307,6 +315,7 @@ function engine() {
   if (e === 'apple') return SR ? 'apple' : 'ondevice';
   return S.settings.autoEngine || (SR ? 'apple' : 'ondevice');
 }
+let lastAsrMs = 0;
 async function listenOnDevice(lang) {
   if (!asrReady) {
     setOrb('think'); status('Getting the listening model ready (one time)…');
@@ -314,7 +323,7 @@ async function listenOnDevice(lang) {
     if (asrErr) { const er = asrErr; asrErr = null; pause(); alertBox('The listening model could not load (' + er + '). Check your internet connection, then tap Resume.'); check(); }
   }
   setOrb('listen'); FX.listen(); await sleep(180); check(); status('Listening… speak now');
-  const rec = await recordUtterance({ onLevel: lv => { const o = $('#orb'); if (o) o.style.transform = 'scale(' + (1 + Math.min(lv * 6, 0.18)) + ')'; } });
+  const rec = await recordUtterance({ onLevel: lv => { const o = $('#orb'); if (o) o.style.transform = 'scale(' + (1 + Math.min(lv * 6, 0.18)) + ')'; }, onEnd: () => { FX.tick(); setOrb('think'); status('Got it…'); } });
   const o = $('#orb'); if (o) o.style.transform = '';
   check();
   if (rec.err) {
@@ -324,8 +333,10 @@ async function listenOnDevice(lang) {
   }
   if (!rec.audio) return { alts: [], err: 'nospeech' };
   setOrb('think'); status('…');
-  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english');
+  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english', 40);
   check();
+  lastAsrMs = out.ms || 0;
+  S.auto.asr = S.auto.asr || []; S.auto.asr.push(out.ms || 0); if (S.auto.asr.length > 50) S.auto.asr.shift();
   return { alts: out.text ? [out.text] : [], err: out.error || null };
 }
 
@@ -375,7 +386,7 @@ async function listen(lang = 'es-MX') {
     pause(); alertBox('iPhone speech recognition is blocked (' + res.err + '). Switch Voices → Listening to "On-device", then tap Resume.'); check();
   }
   setOrb('idle');
-  status(res.alts.length ? 'Heard: “' + res.alts[0] + '”' : (res.err && !['timeout', 'nospeech', 'cancelled'].includes(res.err) ? 'Mic problem: ' + res.err : 'Didn’t hear anything'));
+  status(res.alts.length ? 'Heard: “' + res.alts[0] + '”' + (engine() === 'ondevice' && lastAsrMs ? ' · ' + (lastAsrMs / 1000).toFixed(1) + ' s' : '') : (res.err && !['timeout', 'nospeech', 'cancelled'].includes(res.err) ? 'Mic problem: ' + res.err : 'Didn’t hear anything'));
   check();
   const c = command(res.alts);
   if (c === 'pause') { pause(); check(); }
@@ -504,7 +515,7 @@ async function recall(k, opts = {}) {
     if (!r.alts.length && tries++ < 1) { await en("Didn't catch that. " + it.en); continue; }
     const dunno = r.cmd === 'dunno';
     const s = dunno ? 0 : score(r.alts, it.answers);
-    const ok = s >= 0.72;
+    const ok = s >= (engine() === 'ondevice' ? 0.68 : 0.72);
     showText(it.say, it.en);
     if (ok) {
       S.session.combo++; FX.good(S.session.combo);
@@ -778,6 +789,7 @@ function feedbackReport() {
   const miss = Object.entries(S.auto.misses).sort((a, b) => b[1] - a[1]).slice(0, 15);
   lines.push('Most-missed phrases: ' + (miss.length ? miss.map(([k, n]) => '"' + ITEMS[k].say + '" ×' + n).join(', ') : 'none'));
   lines.push('Times nothing was heard: ' + S.auto.unheard);
+  if (S.auto.asr && S.auto.asr.length) { const a = S.auto.asr.slice().sort((x, y) => x - y); lines.push('On-device recognition time (' + asrDevice + '): median ' + (a[a.length >> 1] / 1000).toFixed(1) + ' s, slowest ' + (a[a.length - 1] / 1000).toFixed(1) + ' s over ' + a.length + ' answers'); }
   const mh = S.auto.mishear.slice(-15);
   lines.push('Recent mishearings: ' + (mh.length ? mh.map(m => '"' + (ITEMS[m.k] ? ITEMS[m.k].say : m.k) + '" heard as "' + m.heard + '"').join('; ') : 'none'));
   lines.push('Recent quizzes: ' + (S.history.slice(-10).map(h => 'pos ' + (h.pos + 1) + ': ' + h.score + '/10 in ' + h.minutes + ' min').join('; ') || 'none'));
@@ -826,7 +838,7 @@ function renderSettings() {
   $('#rate').value = st.rate; $('#rateVal').textContent = rateLabel(st.rate);
   $('#earsOnly').checked = st.earsOnly; $('#tapToTalk').checked = st.tapToTalk;
   document.querySelectorAll('[data-engine]').forEach(b => b.classList.toggle('sel', b.dataset.engine === st.engine));
-  $('#engineNow').textContent = 'Now using: ' + (engine() === 'ondevice' ? 'on-device (Whisper)' + (asrReady ? ', ready' : '') : 'iPhone speech recognition');
+  $('#engineNow').textContent = 'Now using: ' + (engine() === 'ondevice' ? 'on-device (Whisper)' + (asrReady ? ', ready' + (asrDevice ? ' · ' + (asrDevice === 'webgpu' ? 'fast GPU mode' : 'CPU mode') : '') : '') : 'iPhone speech recognition');
   const hasGood = voicesFor('es').some(x => x.q >= 2);
   $('#voiceTip').hidden = hasGood;
   $('#noVoices').hidden = VOICES.length > 0;
