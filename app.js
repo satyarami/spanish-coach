@@ -2,8 +2,11 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.5.0';
 const CHANGELOG = [
+  { v: '1.5.0', date: '2026-11-08', items: [
+    'Send feedback goes to GitHub: a pre-filled page opens, tap Submit, and it is saved in the feedback folder (latest 10 kept).'
+  ] },
   { v: '1.4.0', date: '2026-11-08', items: [
     'Better hearing: on-device listening is now told which phrases you are practising (always mixed with others), so "buenas tardes" is less often heard as unrelated words.',
     'More forgiving of sound-alike spellings (b/v, s/z, silent h, ll/y).',
@@ -837,6 +840,22 @@ async function shareText(title, text) {
   $('#shareArea').value = text; $('#shareArea').hidden = false; $('#shareArea').select(); toast('Select and copy the text below');
   return false;
 }
+const REPO = 'satyarami/spanish-coach';
+function githubFeedbackUrl() {
+  const unit = SCHEDULE[S.pos];
+  const where = unit ? (unit.kind === 'lesson' ? 'Lesson ' + (unit.li + 1) + ' ' + LESSONS[unit.li].title : 'Review day') : 'all lessons done';
+  const first = S.feedback.length ? S.feedback[S.feedback.length - 1].text : 'app report';
+  const title = '[feedback] v' + APP_VERSION + ' · ' + where + ' · ' + first.slice(0, 50);
+  let body = feedbackReport();
+  if (body.length > 5500) body = body.slice(0, 5500) + '\n…(trimmed)';
+  return 'https://github.com/' + REPO + '/issues/new?title=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(body);
+}
+function sendToGitHub() {
+  const url = githubFeedbackUrl();
+  S.feedbackSentAt = new Date().toISOString(); save();
+  const w = window.open(url, '_blank');
+  if (!w) location.href = url;
+}
 async function sendFeedback() {
   const ok = await shareText('Spanish Voice Coach feedback', feedbackReport());
   if (ok) { S.feedbackSentAt = new Date().toISOString(); save(); }
@@ -952,7 +971,8 @@ function init() {
   $('#sessFb').onclick = openFeedback;
   $('#homeFb').onclick = openFeedback;
   $('#fbMic').onclick = fbRecord;
-  $('#fbSend').onclick = sendFeedback;
+  $('#fbSend').onclick = sendToGitHub;
+  $('#fbShare').onclick = sendFeedback;
   $('#fbSave').onclick = () => { const t = $('#fbText').value.trim(); if (!t) return; S.feedback.push({ at: new Date().toISOString(), v: APP_VERSION, where: fbContext(), text: t }); save(); $('#fbText').value = ''; renderFeedbackList(); renderHome(); toast('Note saved'); };
   $('#fbClear').onclick = () => { if ($('#fbClear').dataset.arm) { S.feedback = []; S.auto = DEFAULT().auto; save(); renderFeedbackList(); delete $('#fbClear').dataset.arm; $('#fbClear').textContent = 'Clear sent notes'; } else { $('#fbClear').dataset.arm = 1; $('#fbClear').textContent = 'Tap again to clear'; } };
   $('#settingsBtn').onclick = () => { renderSettings(); show('settings'); };

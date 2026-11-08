@@ -217,8 +217,9 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   <div class="card">
     <h3 id="fbCount"></h3>
     <ul id="fbList"></ul>
-    <button class="btn" id="fbSend">Send to Claude</button>
-    <p class="muted" style="font-size:13px">Opens the share sheet. Choose the Claude app and send it in your Spanish Voice Coach chat. It also includes automatic notes, such as phrases you keep missing.</p>
+    <button class="btn" id="fbSend">Send feedback</button>
+    <p class="muted" style="font-size:13px">Opens a pre-filled GitHub page. Tap <b>Submit new issue</b> and it is saved to the app's feedback folder (the latest 10 are kept). You need to be signed in to GitHub. It also includes automatic notes, such as phrases you keep missing.</p>
+    <button class="btn ghost" id="fbShare">Share another way (Claude, email, Notes)</button>
     <textarea id="shareArea" hidden readonly></textarea>
     <button class="btn ghost" id="fbClear" style="margin-top:8px">Clear sent notes</button>
   </div>
