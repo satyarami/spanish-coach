@@ -2,8 +2,12 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0';
 const CHANGELOG = [
+  { v: '1.6.0', date: '2026-11-08', items: [
+    '15-minute sessions with less repetition: each new phrase is heard once and repeated once, the scene is played once, and the extra "from memory" round is gone.',
+    'Warm-up is up to 4 old phrases; the lightning round only runs if there is time before minute 11; the quiz is unchanged (10 questions, pass 8).'
+  ] },
   { v: '1.5.0', date: '2026-11-08', items: [
     'Send feedback goes to GitHub: a pre-filled page opens, tap Submit, and it is saved in the feedback folder (latest 10 kept).'
   ] },
@@ -45,7 +49,7 @@ const CHANGELOG = [
 
 const KEY = 'svc.state';            // shared by all versions on this site
 const PASS_MARK = 8, QUIZ_LEN = 10;
-const SESSION_MIN = 30, QUIZ_MIN = 5;
+const SESSION_MIN = 15, QUIZ_MIN = 4;
 const SRS_DAYS = [0, 1, 2, 4, 8, 16, 32, 64];
 const LEVELS = [[0, 'Turista'], [1500, 'Viajero'], [5000, 'Conversador'], [12000, 'Experto']];
 
@@ -470,24 +474,22 @@ function planSession() {
   let today = [], scenes = [];
   if (unit.kind === 'lesson') {
     today = keysOf(unit.li);
-    dueKeys(today).slice(0, 8).forEach(k => steps.push({ t: 'recall', k, src: 'review' }));
+    dueKeys(today).slice(0, 4).forEach(k => steps.push({ t: 'recall', k, src: 'review' }));
     steps.push({ t: 'label', text: 'New phrases' });
     today.forEach(k => steps.push({ t: 'teach', k }));
-    steps.push({ t: 'label', text: 'Now from memory' });
-    shuffle(today).forEach(k => steps.push({ t: 'recall', k, src: 'new' }));
     scenes = [unit.li];
   } else {
     for (let i = unit.from; i <= unit.to; i++) today.push(...keysOf(i));
     steps.push({ t: 'label', text: 'Review' });
     const due = dueKeys().filter(k => today.includes(k));
-    const pool = [...new Set([...due, ...shuffle(today)])].slice(0, 18);
+    const pool = [...new Set([...due, ...shuffle(today)])].slice(0, 12);
     pool.forEach(k => steps.push({ t: 'recall', k, src: 'review' }));
-    scenes = shuffle([...Array(unit.to - unit.from + 1).keys()].map(i => i + unit.from)).slice(0, 2);
+    scenes = shuffle([...Array(unit.to - unit.from + 1).keys()].map(i => i + unit.from)).slice(0, 1);
   }
   scenes.forEach((li, si) => {
     steps.push({ t: 'sceneIntro', li });
     const lines = LESSONS[li].scene.lines;
-    const passes = unit.kind === 'lesson' ? [1, 2] : [2];
+    const passes = [2];   // one pass; help only when you miss
     passes.forEach(p => { if (p === 2) steps.push({ t: 'label', text: 'Again, without help', say: 'Now again, without help.' }); lines.forEach((_, i) => steps.push({ t: 'scene', li, i, pass: p })); });
   });
   steps.push({ t: 'lightning' });
@@ -519,10 +521,8 @@ async function stepTeach(k) {
   const it = ITEMS[k];
   clearText();
   await en(it.en + '.');
-  await say(it.say, 0.75);
   showText(it.say, it.en);
-  await sleep(300);
-  await say(it.say);
+  await say(it.say, 0.85);
   const hint = hintFor(lessonKeys(it.lesson).filter(x => x !== k), [it.say]);
   for (let attempt = 0; attempt < 2; attempt++) {
     const r = await listen('es-MX', hint);
@@ -588,7 +588,7 @@ async function stepScene(st) {
     if (r.cmd === 'repeat') { await en(cue); a--; continue; }
     const s = score(r.alts, answers);
     showText(answers[0], cue);
-    if (s >= (st.pass === 1 ? 0.6 : 0.68)) { FX.good(++S.session.combo); addXP(st.pass === 1 ? 8 : 15); await cheer(false); return; }
+    if (s >= (st.pass === 1 ? 0.6 : 0.64)) { FX.good(++S.session.combo); addXP(st.pass === 1 ? 8 : 15); await cheer(false); return; }
     S.session.combo = 0;
     if (!r.alts.length && a === 0) { await en('Your turn. ' + cue); continue; }
     FX.soft();
@@ -599,10 +599,11 @@ async function stepScene(st) {
 async function stepLightning() {
   setPhase('Lightning round');
   const st = S.session;
+  if (st.activeMs >= (SESSION_MIN - QUIZ_MIN) * 60000) return;   // no time left: straight to the quiz
   if (!st.lightningStarted) { st.lightningStarted = true; save(); await en('Lightning round! Answer fast and build your combo.'); }
   const target = (SESSION_MIN - QUIZ_MIN) * 60000;
   st.lightningCount = st.lightningCount || 0;
-  while (st.activeMs < target || st.lightningCount < 6) {
+  while (st.activeMs < target) {
     const pool = shuffle([...st.today, ...dueKeys(st.today).slice(0, 6), ...shuffle(learnedKeys()).slice(0, 6)]);
     const k = pool[0];
     const ok = await recall(k, { lightning: true });
