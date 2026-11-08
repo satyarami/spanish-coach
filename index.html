@@ -129,7 +129,7 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
     <span class="chip">🧭 <b id="level">Turista</b></span>
     <span class="chip">Coach <b id="coach">Lola</b></span>
   </div>
-  <div class="muted" style="font-size:14px">Your trip · each dot is one 30-minute session (squares are review days)</div>
+  <div class="muted" style="font-size:14px">Your trip · each dot is one 15-minute session (squares are review days)</div>
   <div class="journey" id="journey"></div>
   <div class="warn" id="voiceBanner" hidden>
     <b>Get a natural voice (free, 2 minutes).</b> Your iPhone is using its basic robotic voice. Download a better one:<br>
@@ -149,7 +149,7 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 
 <!-- SESSION -->
 <section id="session" class="screen" hidden>
-  <div class="sbar"><span id="timer">0:00 / 30:00</span><span id="xp">+0</span></div>
+  <div class="sbar"><span id="timer">0:00 / 15:00</span><span id="xp">+0</span></div>
   <div class="progress"><div id="bar"></div></div>
   <div id="phase"></div>
   <div class="stage">
@@ -217,8 +217,9 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   <div class="card">
     <h3 id="fbCount"></h3>
     <ul id="fbList"></ul>
-    <button class="btn" id="fbSend">Send to Claude</button>
-    <p class="muted" style="font-size:13px">Opens the share sheet. Choose the Claude app and send it in your Spanish Voice Coach chat. It also includes automatic notes, such as phrases you keep missing.</p>
+    <button class="btn" id="fbSend">Send feedback</button>
+    <p class="muted" style="font-size:13px">Opens a pre-filled GitHub page. Tap <b>Submit new issue</b> and it is saved to the app's feedback folder (the latest 10 are kept). You need to be signed in to GitHub. It also includes automatic notes, such as phrases you keep missing.</p>
+    <button class="btn ghost" id="fbShare">Share another way (Claude, email, Notes)</button>
     <textarea id="shareArea" hidden readonly></textarea>
     <button class="btn ghost" id="fbClear" style="margin-top:8px">Clear sent notes</button>
   </div>
