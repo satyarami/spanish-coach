@@ -2,8 +2,13 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.1.0';
 const CHANGELOG = [
+  { v: '1.1.0', date: '2026-11-08', items: [
+    'New on-device listening (Whisper). It works even when the iPhone blocks Safari speech recognition, and it is hands-free: it hears when you start and stop talking.',
+    'One-time download of the listening model (about 75 MB), then it is cached on your phone.',
+    'Status line under the circle shows what the app heard.'
+  ] },
   { v: '1.0.0', date: '2026-11-08', items: [
     'First release: 30 lessons and 6 review days (Phase 1 and the start of Phase 2), set on a trip through Mexico.',
     'Voice-only sessions: warm-up, new phrases, conversation scene, lightning round, then a 5-minute quiz you must pass (8 of 10).',
@@ -44,7 +49,7 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 // ---------- state ----------
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
-  settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false },
+  settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null },
   session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
 let S;
@@ -125,7 +130,7 @@ function command(alts) {
 
 // ---------- audio fx ----------
 let AC = null;
-function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state !== 'running') { try { AC.resume(); } catch (e) {} } return AC; }
 function tone(freq, t0, dur, vol = 0.12, type = 'sine') {
   const c = ac(); if (!c) return;
   const o = c.createOscillator(), g = c.createGain();
@@ -202,6 +207,103 @@ function speak(text, who = 'es', rateMul = 1) {
 const say = (t, r) => speak(t, 'es', r);
 const en = t => speak(t, 'en');
 
+// ---------- on-device speech recognition (Whisper) ----------
+const ASR_MODEL = 'onnx-community/whisper-base', ASR_DTYPE = 'q8';
+let asrW = null, asrReady = false, asrErr = null, asrWaiters = [], asrSeq = 0, asrPending = {};
+function asrStart() {
+  if (asrW || asrReady) return;
+  asrErr = null;
+  try { asrW = new Worker('asr-worker.js', { type: 'module' }); } catch (e) { asrErr = 'worker: ' + e.message; return; }
+  const files = {};
+  asrW.onmessage = e => {
+    const m = e.data;
+    if (m.type === 'progress') { if (m.file && m.total) files[m.file] = [m.loaded || 0, m.total]; let l = 0, t = 0; Object.values(files).forEach(([a, b]) => { l += a; t += b; }); asrProgress(t ? l / t : 0, t); }
+    else if (m.type === 'ready') { asrReady = true; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
+    else if (m.type === 'error') { asrErr = m.error; asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); }
+    else if (m.type === 'result') { const r = asrPending[m.id]; delete asrPending[m.id]; if (r) r(m); }
+  };
+  asrW.onerror = e => { asrErr = 'worker error ' + (e.message || ''); asrW = null; asrProgress(1); asrWaiters.splice(0).forEach(r => r()); };
+  asrW.postMessage({ type: 'load', model: ASR_MODEL, dtype: ASR_DTYPE });
+}
+function asrProgress(f, total) {
+  const el = $('#asrLoad'); if (!el) return;
+  if (f >= 1) { el.hidden = true; return; }
+  el.hidden = false; $('#asrPct').textContent = Math.round(f * 100) + '%' + (total ? ' of ' + Math.round(total / 1e6) + ' MB' : '');
+  $('#asrBar').style.width = (f * 100) + '%';
+}
+async function asrWait() { asrStart(); if (asrReady || asrErr) return; await new Promise(r => asrWaiters.push(r)); }
+function transcribe(audio, language) {
+  return new Promise(r => { const id = ++asrSeq; asrPending[id] = r; asrW.postMessage({ type: 'asr', id, audio, language, model: ASR_MODEL, dtype: ASR_DTYPE }, [audio.buffer]); });
+}
+function setAudioSession(t) { try { if (navigator.audioSession) navigator.audioSession.type = t; } catch (e) {} }
+function concatF32(arr) { let n = 0; arr.forEach(a => n += a.length); const o = new Float32Array(n); let p = 0; arr.forEach(a => { o.set(a, p); p += a.length; }); return o; }
+function resample(x, from, to) {
+  if (from === to) return x;
+  const r = from / to, n = Math.floor(x.length / r), o = new Float32Array(n);
+  for (let i = 0; i < n; i++) { const a = Math.floor(i * r), b = Math.max(a + 1, Math.floor((i + 1) * r)); let s = 0; for (let j = a; j < b; j++) s += x[j] || 0; o[i] = s / (b - a); }
+  return o;
+}
+// Records one spoken answer: waits for speech, stops after a pause. Returns {audio: Float32Array@16k | null, err?}
+async function recordUtterance(o = {}) {
+  const maxMs = o.maxMs || 9000, endSil = o.silenceMs || 850, noSpeech = o.noSpeechMs || 7000;
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return { audio: null, err: 'mic-unsupported' };
+  let stream;
+  try { setAudioSession('play-and-record'); stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); }
+  catch (e) { setAudioSession('playback'); return { audio: null, err: e && e.name === 'NotAllowedError' ? 'mic-denied' : 'mic-' + (e && e.name) }; }
+  const ctx = ac(); const src = ctx.createMediaStreamSource(stream); const proc = ctx.createScriptProcessor(4096, 1, 1);
+  const chunks = [], sr = ctx.sampleRate, chunkMs = 4096 / sr * 1000;
+  let t = 0, floor = null, speechStart = -1, lastVoice = 0, voicedMs = 0, done = false;
+  return new Promise(resolve => {
+    const finish = reason => {
+      if (done) return; done = true; proc.onaudioprocess = null;
+      try { src.disconnect(); proc.disconnect(); } catch (e) {}
+      stream.getTracks().forEach(tr => tr.stop()); setAudioSession('playback'); run.stopRec = null;
+      if (speechStart < 0 || voicedMs < 150) return resolve({ audio: null, reason });
+      resolve({ audio: resample(concatF32(chunks.slice(Math.max(0, speechStart - 3))), sr, 16000), reason });
+    };
+    run.stopRec = () => finish('stopped');
+    proc.onaudioprocess = e => {
+      const d = new Float32Array(e.inputBuffer.getChannelData(0)); chunks.push(d); t += chunkMs;
+      let s = 0; for (let i = 0; i < d.length; i++) s += d[i] * d[i]; const rms = Math.sqrt(s / d.length);
+      if (floor === null) floor = rms; else if (speechStart < 0) floor = floor * 0.85 + rms * 0.15;
+      const thr = Math.max(0.01, floor * 2.5);
+      if (t > 150 && rms > thr) { if (speechStart < 0) speechStart = chunks.length - 1; lastVoice = t; voicedMs += chunkMs; }
+      if (o.onLevel) o.onLevel(rms);
+      if (speechStart < 0 && t > noSpeech) finish('nospeech');
+      else if (speechStart >= 0 && t - lastVoice > endSil && voicedMs >= 150) finish('end');
+      else if (t > maxMs) finish('max');
+    };
+    src.connect(proc); proc.connect(ctx.destination);
+  });
+}
+function engine() {
+  const e = S.settings.engine;
+  if (e === 'ondevice') return 'ondevice';
+  if (e === 'apple') return SR ? 'apple' : 'ondevice';
+  return S.settings.autoEngine || (SR ? 'apple' : 'ondevice');
+}
+async function listenOnDevice(lang) {
+  if (!asrReady) {
+    setOrb('think'); status('Getting the listening model ready (one time)…');
+    await asrWait(); check();
+    if (asrErr) { const er = asrErr; asrErr = null; pause(); alertBox('The listening model could not load (' + er + '). Check your internet connection, then tap Resume.'); check(); }
+  }
+  setOrb('listen'); FX.listen(); await sleep(180); check(); status('Listening… speak now');
+  const rec = await recordUtterance({ onLevel: lv => { const o = $('#orb'); if (o) o.style.transform = 'scale(' + (1 + Math.min(lv * 6, 0.18)) + ')'; } });
+  const o = $('#orb'); if (o) o.style.transform = '';
+  check();
+  if (rec.err) {
+    pause();
+    alertBox(rec.err === 'mic-denied' ? 'The microphone is blocked for this page. In Safari, tap the "aA" button → Website Settings → Microphone → Allow. Then tap Resume.' : 'Microphone problem: ' + rec.err + '. Tap Resume to try again.');
+    check();
+  }
+  if (!rec.audio) return { alts: [], err: 'nospeech' };
+  setOrb('think'); status('…');
+  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english');
+  check();
+  return { alts: out.text ? [out.text] : [], err: out.error || null };
+}
+
 // ---------- speech in ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 function listenOnce(lang) {
@@ -221,33 +323,33 @@ function listenOnce(lang) {
 }
 async function listen(lang = 'es-MX') {
   check();
-  if (!SR) throw new Error('nosr');
   await sleep(250);
   check();
   let res;
-  if (S.settings.tapToTalk) {
+  if (engine() === 'ondevice') {
+    res = await listenOnDevice(lang);
+  } else if (S.settings.tapToTalk) {
     setOrb('tap'); showTap(true); status('Tap the mic, then speak');
     // iPhone: recognition must start inside the tap itself, so the tap handler starts it.
     const p = await new Promise(r => { run.tapResolve = () => r(listenOnce(lang)); });
     showTap(false); setOrb('listen'); status('Listening…');
     res = await p;
     check();
-    if (res.err === 'not-allowed' || res.err === 'service-not-allowed') {
-      pause();
-      alertBox('The app is not allowed to use the microphone. On iPhone: Settings → Apps → Safari → Microphone → Allow, and make sure Siri & Dictation is on. Then tap Resume.');
-      check();
-    }
   } else {
     setOrb('listen'); FX.listen(); status('Listening…');
     res = await listenOnce(lang);
-    if (['not-allowed', 'service-not-allowed', 'start-failed'].includes(res.err) && !run.paused && !run.quit) {
-      // iPhone may need a tap to start listening: switch to tap-to-talk
-      S.settings.tapToTalk = true; save();
+  }
+  if (engine() === 'apple' && ['not-allowed', 'service-not-allowed', 'start-failed', 'unsupported'].includes(res.err) && !run.paused && !run.quit) {
+    if (S.settings.engine === 'auto') {
+      // The iPhone refused its built-in speech service: switch to on-device listening for good.
+      S.settings.autoEngine = 'ondevice'; S.settings.tapToTalk = false; save(); asrStart();
       setOrb('idle'); return listen(lang);
     }
+    if (!S.settings.tapToTalk && res.err === 'start-failed') { S.settings.tapToTalk = true; save(); setOrb('idle'); return listen(lang); }
+    pause(); alertBox('iPhone speech recognition is blocked (' + res.err + '). Switch Voices → Listening to "On-device", then tap Resume.'); check();
   }
   setOrb('idle');
-  status(res.alts.length ? 'Heard: “' + res.alts[0] + '”' : (res.err && res.err !== 'timeout' ? 'Mic problem: ' + res.err : 'Didn’t hear anything'));
+  status(res.alts.length ? 'Heard: “' + res.alts[0] + '”' : (res.err && !['timeout', 'nospeech', 'cancelled'].includes(res.err) ? 'Mic problem: ' + res.err : 'Didn’t hear anything'));
   check();
   const c = command(res.alts);
   if (c === 'pause') { pause(); check(); }
@@ -551,6 +653,7 @@ function pause() {
   run.paused = true;
   try { speechSynthesis.cancel(); } catch (e) {}
   if (run.rec) try { run.rec.abort(); } catch (e) {}
+  if (run.stopRec) run.stopRec();
   if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
   $('#pauseOverlay').hidden = false; $('#pauseBtn').textContent = 'Resume';
   save();
@@ -565,6 +668,7 @@ function quitSession() {
   run.quit = true;
   try { speechSynthesis.cancel(); } catch (e) {}
   if (run.rec) try { run.rec.abort(); } catch (e) {}
+  if (run.stopRec) run.stopRec();
   if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
   if (run.paused) { run.paused = false; if (run.resume) { const r = run.resume; run.resume = null; r(); } }
   if (!run.active) { renderHome(); show('home'); }
@@ -575,6 +679,7 @@ function unlockAudio() {
 }
 function startOrContinue(restart) {
   unlockAudio();
+  if (engine() === 'ondevice') asrStart();
   if (S.pos >= SCHEDULE.length) { alertBox("You've finished every lesson in this release. Send feedback and ask Claude for the next block."); return; }
   if (restart || !S.session || S.session.pos !== S.pos) S.session = planSession();
   save(); runSession();
@@ -595,7 +700,24 @@ function fbContext() {
   const step = st ? st.steps[st.idx] : null;
   return where + (step ? ' · step ' + st.idx + ' (' + step.t + (step.k ? ' "' + ITEMS[step.k].say + '"' : '') + ')' : '');
 }
+async function fbRecordOnDevice() {
+  if (run.stopRec) { run.stopRec(); return; }
+  ac(); asrStart();
+  $('#fbMic').classList.add('on'); $('#fbStatus').textContent = 'Listening… pause for 2 seconds or tap again to finish.';
+  const rec = await recordUtterance({ maxMs: 45000, silenceMs: 2000, noSpeechMs: 8000 });
+  $('#fbMic').classList.remove('on');
+  if (!rec.audio) { $('#fbStatus').textContent = rec.err ? 'Microphone problem: ' + rec.err : "I didn't catch anything. Try again."; return; }
+  $('#fbStatus').textContent = 'Writing it down…';
+  await asrWait();
+  if (asrErr) { $('#fbStatus').textContent = 'The listening model could not load: ' + asrErr; asrErr = null; return; }
+  const out = await transcribe(rec.audio, 'english');
+  const text = (out.text || '').trim();
+  $('#fbHeard').textContent = text;
+  if (text) { S.feedback.push({ at: new Date().toISOString(), v: APP_VERSION, where: fbContext(), text }); save(); renderFeedbackList(); $('#fbStatus').textContent = 'Saved. Tap the mic to add more.'; FX.good(); }
+  else $('#fbStatus').textContent = "I didn't catch anything. Try again.";
+}
 function fbRecord() {
+  if (engine() === 'ondevice') return fbRecordOnDevice();
   if (!SR) { $('#fbStatus').textContent = 'Listening is not available here.'; return; }
   if (fbRec) { try { fbRec.stop(); } catch (e) {} return; }
   const rec = new SR(); fbRec = rec;
@@ -612,7 +734,7 @@ function fbRecord() {
     if (text) { S.feedback.push({ at: new Date().toISOString(), v: APP_VERSION, where: fbContext(), text }); save(); renderFeedbackList(); $('#fbStatus').textContent = 'Saved. Tap the mic to add more.'; FX.good(); }
     else $('#fbStatus').textContent = "I didn't catch anything. Try again.";
   };
-  rec.onerror = () => {};
+  rec.onerror = ev => { if (['not-allowed', 'service-not-allowed'].includes(ev.error) && S.settings.engine === 'auto') { S.settings.autoEngine = 'ondevice'; save(); asrStart(); $('#fbStatus').textContent = 'Switched to on-device listening. Tap the mic again.'; } };
   $('#fbMic').classList.add('on'); $('#fbStatus').textContent = 'Listening… tap again to finish.';
   try { rec.start(); } catch (e) { fbRec = null; $('#fbMic').classList.remove('on'); }
 }
@@ -677,6 +799,8 @@ function renderSettings() {
   fillVoiceList('#enVoices', 'en', st.enVoice, uri => { st.enVoice = uri; save(); });
   $('#rate').value = st.rate; $('#rateVal').textContent = rateLabel(st.rate);
   $('#earsOnly').checked = st.earsOnly; $('#tapToTalk').checked = st.tapToTalk;
+  document.querySelectorAll('[data-engine]').forEach(b => b.classList.toggle('sel', b.dataset.engine === st.engine));
+  $('#engineNow').textContent = 'Now using: ' + (engine() === 'ondevice' ? 'on-device (Whisper)' + (asrReady ? ', ready' : '') : 'iPhone speech recognition');
   const hasGood = voicesFor('es').some(x => x.q >= 2);
   $('#voiceTip').hidden = hasGood;
   $('#noVoices').hidden = VOICES.length > 0;
@@ -723,7 +847,7 @@ function renderHome() {
   SCHEDULE.forEach((u, i) => { const d = document.createElement('span'); d.className = 'dot' + (i < S.pos ? ' done' : i === S.pos ? ' now' : '') + (u.kind === 'review' ? ' rev' : ''); j.appendChild(d); });
   $('#ver').textContent = 'v' + APP_VERSION;
   $('#fbBadge').textContent = S.feedback.length ? String(S.feedback.length) : '';
-  $('#srWarn').hidden = !!SR;
+  $('#srWarn').hidden = !!(SR || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
 }
 function whatsNew(force) {
   if (!force && S.seenVersion === APP_VERSION) return;
@@ -756,6 +880,7 @@ function init() {
   $('#settingsBtn').onclick = () => { renderSettings(); show('settings'); };
   $('#setBack').onclick = () => { renderHome(); show('home'); };
   document.querySelectorAll('[data-gender]').forEach(b => b.onclick = () => { S.settings.gender = b.dataset.gender; S.settings.esVoice = null; S.settings.enVoice = null; save(); renderSettings(); const v = chooseVoice('es', S.settings.gender, null); if (v) preview(v, 'es'); });
+  document.querySelectorAll('[data-engine]').forEach(b => b.onclick = () => { S.settings.engine = b.dataset.engine; if (b.dataset.engine === 'auto') S.settings.autoEngine = null; save(); if (engine() === 'ondevice') asrStart(); renderSettings(); });
   $('#rate').oninput = e => { S.settings.rate = +e.target.value; $('#rateVal').textContent = rateLabel(S.settings.rate); save(); };
   $('#rate').onchange = () => { const v = voiceSet().es; if (v) preview(v, 'es'); };
   $('#earsOnly').onchange = e => { S.settings.earsOnly = e.target.checked; save(); };
@@ -770,6 +895,7 @@ function init() {
 
   renderHome(); show('home');
   whatsNew(false);
+  if (engine() === 'ondevice') asrStart();
 }
 window.SVC = { norm, score, numES, SCHEDULE, ITEMS, planSession: () => planSession(), _state: () => S, _load: load };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
