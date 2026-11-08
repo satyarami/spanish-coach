@@ -14,6 +14,16 @@ The goal: after 6 months, hold a beginner to advanced-beginner conversation with
 - **What success looks like:** talking with native speakers about introductions, ordering food, directions, shopping, travel, making plans, telling what happened yesterday, giving opinions, and keeping a conversation going with fillers and follow-up questions. Getting your meaning across matters more than perfect grammar, including rephrasing when you don't know a word. Roughly CEFR A2.
 - **Spanish variety:** Latin American (Mexican) Spanish (confirmed).
 
+## Languages
+
+The app teaches Spanish or Gujarati, chosen from a menu on the home screen.
+
+- **Language menu:** Spanish or ગુજરાતી Gujarati. Switching takes you to that language's own place.
+- **Separate progress per language:** lesson, streak, points, phrase memory and any session in progress are kept separately for each language. Existing Spanish progress moves into the Spanish slot unchanged.
+- **Same format:** Gujarati follows the same 15-minute sessions, quiz rule (8 of 10), name, voices, lessons menu and feedback as Spanish.
+- **Gujarati content:** beginner course for an English speaker, set on a trip through Gujarat. After you answer, the text shows in Gujarati script with a romanized form (for example "kem cho").
+- **Depends on the iPhone:** a Gujarati voice must be available on the phone for speech, and the on-device listener must recognise Gujarati well enough. Both are checked before the Gujarati course is built.
+
 ## Daily session (15 min) and quiz gate
 
 Every session is 15 minutes: about 11 minutes of spoken learning, then a spoken quiz of about 4 minutes. Each phrase is practised once in the lesson, with no extra repetition. You must pass the quiz to unlock the next lesson.
