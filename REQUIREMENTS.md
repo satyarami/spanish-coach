@@ -105,7 +105,7 @@ Progress is saved after every answer, and you can continue exactly where you lef
 
 - **What is saved:** your name and how to say it, the current lesson, the session part and question you were on, the time already spent, your quiz history, spaced-repetition data for every phrase, points, streak and settings.
 - **Resume:** if you close the app mid-session, the home screen offers "Continue session (14 min done)" or "Restart this lesson".
-- **Where it is stored:** on your iPhone, inside the app. All versions of the app share the same progress, so updating or rolling back loses nothing.
+- **Where it is stored:** on your iPhone, inside the app. All versions of the app share the same progress, so updating or rolling back loses nothing. New features never send an existing user back to lesson 1: your place is stored by lesson name rather than number, so adding lessons can't move you, and the app keeps a copy of your progress before each update. If saved data can't be read, the app restores the copy rather than starting over.
 - **Safety:** use the app from its Home Screen icon. Plain Safari can clear data from websites you haven't opened for several days. A "Back up progress" button saves a backup file through the iPhone share sheet, for example to Files or Notes, and "Restore" reads it back.
 
 ## Platform, link, versions and rollback
