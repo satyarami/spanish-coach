@@ -131,6 +131,11 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
   </div>
   <div class="muted" style="font-size:14px">Your trip · each dot is one 30-minute session (squares are review days)</div>
   <div class="journey" id="journey"></div>
+  <div class="warn" id="voiceBanner" hidden>
+    <b>Get a natural voice (free, 2 minutes).</b> Your iPhone is using its basic robotic voice. Download a better one:<br>
+    Settings → Accessibility → Spoken Content → Voices → <b>Spanish</b> → pick <b>Paulina (Enhanced)</b> or <b>Juan (Enhanced)</b>, or any voice marked Premium, and tap the download icon. Do the same under <b>English</b> (try Ava or Zoe Premium, or Evan Enhanced). Then close and reopen the app and choose the voice under Voices.
+    <div class="row" style="margin-top:8px"><button class="btn ghost" id="vbOpen">Open Voices</button><button class="btn ghost" id="vbClose">Hide</button></div>
+  </div>
   <div class="warn" id="srWarn" hidden>This browser can't listen. Open the app in <b>Safari</b> on your iPhone (or Chrome on a computer).</div>
   <div class="links">
     <button id="wnBtn">What's new</button>

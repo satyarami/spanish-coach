@@ -2,8 +2,13 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const CHANGELOG = [
+  { v: '1.2.0', date: '2026-11-08', items: [
+    'Encouragement after every correct answer, with varied cheers and celebrations at 3, 5 and 10 in a row.',
+    'Kinder wording when you miss ("Good try", "Casi").',
+    'Prefers the natural-sounding Enhanced and Premium iPhone voices, and the home screen shows how to download them if you only have the basic ones.'
+  ] },
   { v: '1.1.0', date: '2026-11-08', items: [
     'New on-device listening (Whisper). It works even when the iPhone blocks Safari speech recognition, and it is hands-free: it hears when you start and stop talking.',
     'One-time download of the listening model (about 75 MB), then it is cached on your phone.',
@@ -154,7 +159,7 @@ const FEMALE = /paulina|m[oó]nica|marisol|jimena|angelica|ang[eé]lica|soledad|
 const MALE = /\bjuan\b|jorge|diego|carlos|pablo|[aá]lvaro|enrique|rocko|eddy|reed|grandpa|\balex\b|daniel|\btom\b|aaron|arthur|fred|oliver|gordon|\blee\b|rishi|nathan|evan|siri.*male|\bmale\b|hombre|ralph|albert|bruce|junior|mateo|andr[eé]s/i;
 const NOVELTY = /rocko|eddy|reed|grandpa|grandma|flo|sandy|shelley|albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|junior|ralph|fred/i;
 function genderOf(v) { const s = v.name + ' ' + v.voiceURI; if (MALE.test(s) && !/female/i.test(s)) return 'male'; if (FEMALE.test(s)) return 'female'; return '?'; }
-function quality(v) { const s = (v.name + ' ' + v.voiceURI).toLowerCase(); if (s.includes('premium')) return 3; if (s.includes('enhanced') || s.includes('mejorad') || s.includes('neural') || s.includes('natural')) return 2; return NOVELTY.test(s) ? 0 : 1; }
+function quality(v) { const s = (v.name + ' ' + v.voiceURI).toLowerCase(); if (s.includes('premium') || s.includes('siri')) return 3; if (s.includes('enhanced') || s.includes('mejorad') || s.includes('neural') || s.includes('natural')) return 2; return NOVELTY.test(s) ? 0 : (s.includes('compact') ? 1 : 1.5); }
 function regionRank(lang, base) {
   lang = (lang || '').replace('_', '-').toLowerCase();
   if (base === 'es') return ({ 'es-mx': 4, 'es-us': 3, 'es-419': 3 })[lang] || (lang.startsWith('es-') && lang !== 'es-es' ? 2 : lang === 'es-es' ? 1 : 0);
@@ -189,7 +194,7 @@ let run = { active: false, paused: false, quit: false, rec: null, tapResolve: nu
 function check() { if (run.quit) throw QUIT; if (run.paused) throw PAUSED; }
 
 // ---------- speech out ----------
-function speak(text, who = 'es', rateMul = 1) {
+function speak(text, who = 'es', rateMul = 1, pitch = 1) {
   check();
   return new Promise((resolve, reject) => {
     const vs = voiceSet();
@@ -197,6 +202,7 @@ function speak(text, who = 'es', rateMul = 1) {
     const v = who === 'en' ? vs.en : who === 'partner' ? vs.partner : vs.es;
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = who === 'en' ? 'en-US' : 'es-MX';
     u.rate = Math.max(0.5, Math.min(1.4, (who === 'en' ? 1 : S.settings.rate) * rateMul));
+    u.pitch = pitch;
     let done = false;
     const fin = () => { if (done) return; done = true; clearTimeout(t); run.paused || run.quit ? reject(run.quit ? QUIT : PAUSED) : resolve(); };
     const t = setTimeout(fin, 1500 + text.length * 110 / u.rate);
@@ -207,6 +213,21 @@ function speak(text, who = 'es', rateMul = 1) {
 }
 const say = (t, r) => speak(t, 'es', r);
 const en = t => speak(t, 'en');
+const PRAISE = ['¡Muy bien!', '¡Perfecto!', '¡Eso es!', '¡Excelente!', '¡Qué bien!', '¡Bravo!', '¡Fantástico!', '¡Genial!', '¡Correcto!', '¡Así se dice!', '¡Muy bien dicho!', '¡Impecable!', '¡Me encanta!', '¡Súper!', '¡Lo tienes!'];
+const QUICK = ['¡Bien!', '¡Sí!', '¡Correcto!', '¡Eso!', '¡Muy bien!', '¡Perfecto!'];
+const NEAR = ['Casi.', 'Good try.', 'Almost there.', 'Close!', 'Nice effort.'];
+let lastPraise = '';
+function praiseLine(list) { let p; do { p = pick(list); } while (p === lastPraise && list.length > 1); lastPraise = p; return p; }
+// Spoken encouragement after a correct answer: always something, with extra at streak milestones.
+async function cheer(quick) {
+  const c = S.session ? S.session.combo : 0;
+  const pitch = 1 + (Math.random() * 0.15 - 0.03);
+  if (!quick && [3, 5, 10, 15, 20].includes(c)) {
+    const big = { 3: '¡Tres seguidas!', 5: '¡Cinco seguidas! ¡Increíble!', 10: '¡Diez seguidas! ¡Eres una estrella!', 15: '¡Quince! ¡Imparable!', 20: '¡Veinte seguidas! ¡Campeón!' }[c];
+    FX.level(); await speak(big, 'es', 1.05, pitch); return;
+  }
+  await speak(praiseLine(quick ? QUICK : PRAISE), 'es', 1.05, pitch);
+}
 
 // ---------- on-device speech recognition (Whisper) ----------
 const ASR_MODEL = 'onnx-community/whisper-base', ASR_DTYPE = 'q8';
@@ -459,7 +480,7 @@ async function stepTeach(k) {
     const r = await listen();
     if (r.cmd === 'repeat') { await say(it.say, 0.75); attempt--; continue; }
     const s = score(r.alts, it.answers);
-    if (s >= 0.6) { FX.good(); addXP(5); if (Math.random() < 0.4) await say(pick(['¡Bien!', '¡Eso es!', '¡Muy bien!'])); break; }
+    if (s >= 0.6) { FX.good(); addXP(5); await cheer(true); break; }
     if (!r.alts.length && attempt === 0) { await en("I didn't hear you. Once more."); await say(it.say, 0.8); continue; }
     if (r.alts.length) S.auto.mishear.push({ k, heard: r.alts[0] });
     if (attempt === 0) { FX.soft(); await en('Listen again.'); await say(it.say, 0.7); }
@@ -484,17 +505,17 @@ async function recall(k, opts = {}) {
     if (ok) {
       S.session.combo++; FX.good(S.session.combo);
       addXP(opts.quiz ? 20 : 10 + Math.min(S.session.combo, 10));
-      if (!opts.quiz && Math.random() < 0.35) await say(pick(['¡Perfecto!', '¡Eso es!', '¡Qué bien!', '¡Excelente!', '¡Muy bien!']));
+      await cheer(!!opts.quiz || !!opts.lightning);
       return true;
     }
     S.session.combo = 0;
     if (r.alts.length && !dunno) S.auto.mishear.push({ k, heard: r.alts[0] });
     FX.soft();
     if (opts.quiz) { await say(it.say); return false; }
-    await en(s >= 0.5 ? 'Almost. Listen.' : (dunno ? "It's:" : 'It is:'));
+    await en(s >= 0.5 ? praiseLine(NEAR) + ' Listen.' : (dunno ? 'No problem. It is:' : 'Good try. It is:'));
     await say(it.say, 0.8);
     const r2 = await listen();
-    if (score(r2.alts, it.answers) >= 0.6) { FX.good(); await say('¡Bien!'); }
+    if (score(r2.alts, it.answers) >= 0.6) { FX.good(); await cheer(true); }
     return false;
   }
 }
@@ -517,11 +538,11 @@ async function stepScene(st) {
     if (r.cmd === 'repeat') { await en(cue); a--; continue; }
     const s = score(r.alts, answers);
     showText(answers[0], cue);
-    if (s >= (st.pass === 1 ? 0.6 : 0.68)) { FX.good(++S.session.combo); addXP(st.pass === 1 ? 8 : 15); return; }
+    if (s >= (st.pass === 1 ? 0.6 : 0.68)) { FX.good(++S.session.combo); addXP(st.pass === 1 ? 8 : 15); await cheer(false); return; }
     S.session.combo = 0;
     if (!r.alts.length && a === 0) { await en('Your turn. ' + cue); continue; }
     FX.soft();
-    if (model) { await en('You could say:'); await say(model, 0.8); }
+    if (model) { await en(praiseLine(NEAR) + ' You could say:'); await say(model, 0.8); }
     if (a === 1) return;
   }
 }
@@ -848,7 +869,13 @@ function renderHome() {
   SCHEDULE.forEach((u, i) => { const d = document.createElement('span'); d.className = 'dot' + (i < S.pos ? ' done' : i === S.pos ? ' now' : '') + (u.kind === 'review' ? ' rev' : ''); j.appendChild(d); });
   $('#ver').textContent = 'v' + APP_VERSION;
   $('#fbBadge').textContent = S.feedback.length ? String(S.feedback.length) : '';
+  renderVoiceBanner();
   $('#srWarn').hidden = !!(SR || (navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+}
+function renderVoiceBanner() {
+  const b = $('#voiceBanner'); if (!b) return;
+  const es = voicesFor('es');
+  b.hidden = !es.length || es.some(x => x.q >= 2) || S.voiceBannerDismissed;
 }
 function whatsNew(force) {
   if (!force && S.seenVersion === APP_VERSION) return;
@@ -864,7 +891,7 @@ function init() {
   load();
   refreshVoices();
   try { speechSynthesis.onvoiceschanged = () => { refreshVoices(); if (!$('#settings').hidden) renderSettings(); }; } catch (e) {}
-  let polls = 0; const p = setInterval(() => { refreshVoices(); if (VOICES.length || ++polls > 20) clearInterval(p); }, 250);
+  let polls = 0; const p = setInterval(() => { refreshVoices(); renderVoiceBanner(); if (++polls > 40) clearInterval(p); }, 500);
 
   $('#startBtn').onclick = () => startOrContinue(false);
   $('#restartBtn').onclick = () => startOrContinue(true);
@@ -891,6 +918,8 @@ function init() {
   $('#restoreBtn').onclick = () => $('#restoreFile').click();
   $('#restoreFile').onchange = e => { if (e.target.files[0]) restore(e.target.files[0]); e.target.value = ''; };
   $('#wnBtn').onclick = () => whatsNew(true);
+  $('#vbClose').onclick = () => { S.voiceBannerDismissed = true; save(); renderVoiceBanner(); };
+  $('#vbOpen').onclick = () => { renderSettings(); show('settings'); };
   $('#wnClose').onclick = () => $('#whatsnew').hidden = true;
   $('#alertClose').onclick = () => $('#alert').hidden = true;
   document.addEventListener('visibilitychange', () => { if (document.hidden && run.active) pause(); });
