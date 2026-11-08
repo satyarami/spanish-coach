@@ -2,8 +2,12 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.8.0';
 const CHANGELOG = [
+  { v: '1.8.0', date: '2026-11-08', items: [
+    '⏪ 30s and 30s ⏩ buttons during a session (not inside the quiz).',
+    'Lessons menu: replay any lesson you have passed as practice, continue your current lesson where you left off; lessons you have not passed stay locked.'
+  ] },
   { v: '1.7.1', date: '2026-11-08', items: [
     'Updates never send you back to lesson 1: your place is now stored by lesson name, and a copy of your progress is kept before each update.'
   ] },
@@ -107,6 +111,8 @@ function migrate(d) {
   if (pos < 0) pos = Math.max(0, Math.min(Number(d.pos) || 0, SCHEDULE.length));
   d.pos = pos;
   d.posId = SCHEDULE[pos] ? SCHEDULE[pos].id : 'done';
+  if (d.session && d.session.practice) d.session = d.mainSession || null;
+  d.mainSession = null;
   // In-progress session: keep it if it is for the current lesson; remove steps for phrases that no longer exist.
   if (d.session) {
     const sp = d.session;
@@ -271,9 +277,9 @@ function refreshVoices() { try { VOICES = speechSynthesis.getVoices() || []; } c
 const coachName = () => S.settings.gender === 'male' ? 'Leo' : 'Lola';
 
 // ---------- run control ----------
-const PAUSED = { paused: true }, QUIT = { quit: true };
+const PAUSED = { paused: true }, QUIT = { quit: true }, JUMP = { jump: true };
 let run = { active: false, paused: false, quit: false, rec: null, tapResolve: null };
-function check() { if (run.quit) throw QUIT; if (run.paused) throw PAUSED; }
+function check() { if (run.quit) throw QUIT; if (run.jump) { run.jump = false; throw JUMP; } if (run.paused) throw PAUSED; }
 
 // ---------- speech out ----------
 function speak(text, who = 'es', rateMul = 1, pitch = 1) {
@@ -498,7 +504,7 @@ function show(id) { document.querySelectorAll('.screen').forEach(s => s.hidden =
 function setOrb(state) { const o = $('#orb'); if (o) o.dataset.state = state; }
 function showTap(on) { $('#tapBtn').hidden = !on; }
 function status(t) { const e = $('#status'); if (e) e.textContent = t || ''; }
-function setPhase(label) { $('#phase').textContent = label; }
+function setPhase(label) { $('#phase').textContent = (S.session && S.session.practice ? 'Practice · ' : '') + label; }
 function showText(es, enText) {
   if (S.settings.earsOnly) { $('#es').textContent = ''; $('#en').textContent = ''; return; }
   $('#es').textContent = es || ''; $('#en').textContent = enText || '';
@@ -530,8 +536,8 @@ function dueKeys(exclude = []) {
 const learnedKeys = () => Object.keys(S.srs).filter(k => ITEMS[k]);
 
 // ---------- session planning ----------
-function planSession() {
-  const unit = SCHEDULE[S.pos];
+function planSession(pos = S.pos) {
+  const unit = SCHEDULE[pos];
   const steps = [{ t: 'intro' }];
   let today = [], scenes = [];
   if (unit.kind === 'lesson') {
@@ -556,14 +562,14 @@ function planSession() {
   });
   steps.push({ t: 'lightning' });
   steps.push({ t: 'quiz' });
-  return { pos: S.pos, posId: SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
+  return { pos, posId: SCHEDULE[pos] ? SCHEDULE[pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
 }
 function today_() { return today(); }
 
 // ---------- step runners ----------
 let sentFirstHint = 0;
 async function stepIntro() {
-  const unit = SCHEDULE[S.pos];
+  const unit = SCHEDULE[S.session.pos];
   if (unit.kind === 'lesson') {
     const L = LESSONS[unit.li];
     setPhase('Lesson ' + (unit.li + 1) + ' · ' + L.title);
@@ -571,7 +577,7 @@ async function stepIntro() {
     await say(withName('¡Hola!') + ' Soy ' + coachName() + '.', 1);
     await en('Lesson ' + (unit.li + 1) + '. ' + L.place + '.');
     await en(L.tip);
-    if (S.pos === 0) await en('Answer out loud after the beep. Say "repite" to hear something again, or "no sé" if you don\'t know.');
+    if (S.session.pos === 0 && !S.session.practice) await en('Answer out loud after the beep. Say "repite" to hear something again, or "no sé" if you don\'t know.');
   } else {
     setPhase('Review day');
     showText('Repaso', 'Review and conversation day');
@@ -704,7 +710,7 @@ async function stepQuiz() {
     if (ok) q.correct++; else q.missed.push(k);
     q.i++; save();
   }
-  if (!q.logged) { q.logged = true; S.history.push({ day: today(), pos: S.pos, score: q.correct, attempt: q.attempt, minutes: Math.round(st.activeMs / 60000) }); save(); }
+  if (!q.logged) { q.logged = true; S.history.push({ day: today(), pos: st.pos, practice: !!st.practice, score: q.correct, attempt: q.attempt, minutes: Math.round(st.activeMs / 60000) }); save(); }
   if (q.correct >= PASS_MARK) return pass(q.correct);
   // fail -> targeted review then retake
   q.phase = 'review'; q.ri = 0; save();
@@ -729,6 +735,13 @@ async function pass(score) {
   FX.fanfare();
   setPhase('Passed!');
   showText('¡Felicidades!', score + ' out of 10');
+  if (st.practice) {
+    addXP(50);
+    S.session = S.mainSession || null; S.mainSession = null; save();
+    await say(withName('¡Muy bien!') + ' ¡Repaso completo!');
+    await en(score + ' out of ten. Practice done. Your place in the course is unchanged.');
+    throw QUIT;
+  }
   const t = today();
   if (S.lastPass !== t) {
     const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -869,6 +882,9 @@ async function runSession(nameOnly) {
   }
   while (!run.quit && S.session && S.session.idx < S.session.steps.length) {
     const st = S.session.steps[S.session.idx];
+    S.session.stepAt = S.session.stepAt || {};
+    S.session.stepAt[S.session.idx] = S.session.activeMs;
+    updateJumpButtons();
     try {
       if (st.t === 'intro') await stepIntro();
       else if (st.t === 'label') { setPhase(st.text); if (st.say) await en(st.say); else await sleep(200); }
@@ -878,15 +894,19 @@ async function runSession(nameOnly) {
       else if (st.t === 'scene') { setPhase('Scene' + (st.pass === 2 ? ' · no help' : '')); await stepScene(st); }
       else if (st.t === 'lightning') await stepLightning();
       else if (st.t === 'quiz') await stepQuiz();
+      if (run.jump) { run.jump = false; continue; }   // a jump landed while the step was finishing
       if (S.session) { S.session.idx++; save(); }
     } catch (e) {
+      if (e === JUMP) continue;
       if (e === PAUSED) { save(); await waitResume(); if (run.quit) break; continue; }
       if (e === QUIT) break;
       if (e && e.message === 'nosr') { alertBox('Listening is not available in this browser. Open the app in Safari on iPhone, or Chrome on a computer.'); break; }
       console.error(e); toast('Something went wrong; continuing'); if (S.session) { S.session.idx++; save(); }
     }
   }
-  run.active = false; clearInterval(tick); save();
+  run.active = false; clearInterval(tick);
+  if (S.session && S.session.practice) { S.session = S.mainSession || null; S.mainSession = null; }
+  save();
   try { speechSynthesis.cancel(); } catch (e) {}
   renderHome(); show('home');
 }
@@ -921,6 +941,72 @@ function unlockAudio() {
   ac();
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
 }
+// ---------- rewind / fast forward (about 30 seconds of teaching) ----------
+const STEP_SECS = { intro: 20, label: 2, teach: 12, recall: 9, sceneIntro: 6, scene: 8, lightning: 30 };
+function canJump() { const st = S.session; if (!run.active || run.setup || !st) return false; const step = st.steps[st.idx]; return !!step && step.t !== 'quiz'; }
+function updateJumpButtons() { const ok = canJump(); $('#rwBtn').disabled = !ok; $('#ffBtn').disabled = !ok; }
+function interrupt() {
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (run.rec) try { run.rec.abort(); } catch (e) {}
+  if (run.stopRec) run.stopRec();
+  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
+}
+function jump(dir) {
+  if (!canJump()) { toast('Not during the quiz'); return; }
+  const st = S.session, at = st.stepAt || {};
+  const quizAt = st.steps.findIndex(x => x.t === 'quiz');
+  let to;
+  if (dir < 0) {
+    const target = st.activeMs - 30000;
+    to = 0;
+    for (let i = st.idx - 1; i >= 0; i--) { if (at[i] !== undefined && at[i] <= target) { to = i; break; } }
+    if (to === 0 && st.idx > 3 && !Object.keys(at).some(k => +k < st.idx)) to = st.idx - 3;
+  } else if (st.steps[st.idx].t === 'lightning') {
+    to = st.idx + 1;
+  } else {
+    let budget = 30, i = st.idx;
+    while (i < st.steps.length - 1 && budget > 0) { budget -= STEP_SECS[st.steps[i].t] || 8; i++; if (st.steps[i].t === 'lightning' || st.steps[i].t === 'quiz') break; }
+    to = Math.max(i, st.idx + 1);
+  }
+  if (quizAt >= 0) to = Math.min(to, quizAt);
+  if (to === st.idx && dir > 0) return;
+  st.idx = to; save();
+  toast(dir < 0 ? '⏪ Back 30 s' : '30 s ⏩');
+  if (!run.paused) { run.jump = true; interrupt(); }
+  updateJumpButtons();
+}
+
+// ---------- lessons menu ----------
+function unitTitle(u) { return u.kind === 'lesson' ? LESSONS[u.li].title : 'Día de repaso'; }
+function unitSub(u) { return u.kind === 'lesson' ? LESSONS[u.li].place : 'Review · lessons ' + (u.from + 1) + '–' + (u.to + 1); }
+function renderLessons() {
+  const ul = $('#lessonList'); ul.innerHTML = '';
+  SCHEDULE.forEach((u, i) => {
+    const state = i < S.pos ? 'passed' : i === S.pos ? 'current' : 'locked';
+    const best = S.history.filter(h => h.pos === i).reduce((m, h) => Math.max(m, h.score || 0), 0);
+    const b = document.createElement('button');
+    b.className = 'lesson ' + state; b.disabled = state === 'locked';
+    const icon = state === 'passed' ? '✓' : state === 'current' ? '▶' : '🔒';
+    let note = state === 'passed' ? 'Unlocked · passed' + (best ? ', best ' + best + '/10' : '') + ' · tap to practise'
+      : state === 'current' ? (S.session && S.session.pos === i && S.session.idx > 0 ? 'In progress · ' + Math.floor(S.session.activeMs / 60000) + ' min done · tap to continue' : 'Up next · tap to start')
+      : 'Locked · pass the quiz before it to unlock';
+    b.innerHTML = '<span class="li">' + icon + '</span><span class="lt"><b></b><small></small></span>';
+    b.querySelector('b').textContent = (i + 1) + '. ' + unitTitle(u);
+    b.querySelector('small').textContent = unitSub(u) + ' — ' + note;
+    if (state === 'passed') b.onclick = () => startPractice(i);
+    if (state === 'current') b.onclick = () => startOrContinue(false);
+    ul.appendChild(b);
+  });
+}
+function startPractice(i) {
+  if (i >= S.pos) return;   // only passed lessons
+  unlockAudio();
+  if (engine() === 'ondevice') asrStart();
+  if (S.session && !S.session.practice) S.mainSession = S.session;
+  S.session = planSession(i); S.session.practice = true;
+  save(); runSession();
+}
+
 function startOrContinue(restart) {
   unlockAudio();
   if (engine() === 'ondevice') { if (S.asrLoading) { S.settings.gpu = false; } asrStart(); }
@@ -1135,6 +1221,10 @@ function init() {
   let polls = 0; const p = setInterval(() => { refreshVoices(); renderVoiceBanner(); if (++polls > 40) clearInterval(p); }, 500);
 
   $('#startBtn').onclick = () => startOrContinue(false);
+  $('#rwBtn').onclick = () => jump(-1);
+  $('#ffBtn').onclick = () => jump(1);
+  $('#lessonsBtn').onclick = () => { renderLessons(); show('lessons'); };
+  $('#lessonsBack').onclick = () => { renderHome(); show('home'); };
   $('#restartBtn').onclick = () => startOrContinue(true);
   $('#pauseBtn').onclick = () => run.paused ? resume() : pause();
   $('#resumeBig').onclick = resume;
