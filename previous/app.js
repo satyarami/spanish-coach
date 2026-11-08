@@ -2,8 +2,11 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const CHANGELOG = [
+  { v: '1.2.1', date: '2026-11-08', items: [
+    'Fix: when the iPhone blocks its speech service, the app always switches to on-device listening by itself.'
+  ] },
   { v: '1.2.0', date: '2026-11-08', items: [
     'Encouragement after every correct answer, with varied cheers and celebrations at 3, 5 and 10 in a row.',
     'Kinder wording when you miss ("Good try", "Casi").',
@@ -362,9 +365,10 @@ async function listen(lang = 'es-MX') {
     res = await listenOnce(lang);
   }
   if (engine() === 'apple' && ['not-allowed', 'service-not-allowed', 'start-failed', 'unsupported'].includes(res.err) && !run.paused && !run.quit) {
-    if (S.settings.engine === 'auto') {
+    if (S.settings.engine === 'auto' || res.err === 'service-not-allowed') {
       // The iPhone refused its built-in speech service: switch to on-device listening for good.
-      S.settings.autoEngine = 'ondevice'; S.settings.tapToTalk = false; save(); asrStart();
+      S.settings.autoEngine = 'ondevice'; S.settings.engine = 'auto'; S.settings.tapToTalk = false; save(); asrStart();
+      toast('Switching to on-device listening');
       setOrb('idle'); return listen(lang);
     }
     if (!S.settings.tapToTalk && res.err === 'start-failed') { S.settings.tapToTalk = true; save(); setOrb('idle'); return listen(lang); }
