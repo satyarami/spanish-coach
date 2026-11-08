@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Spanish Voice Coach</title>
+<meta name="theme-color" content="#1f3b3a">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1d2624; --muted:#5d6b68; --paper:#fbf6ee; --card:#fff; --line:#e9dfd0;
+  --teal:#1f3b3a; --teal2:#2f5d5a; --terra:#c8553d; --gold:#f2a541; --leaf:#4f8a5b;
+  --r:18px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.45 Inter,system-ui,-apple-system,sans-serif}
+body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);min-height:100vh}
+h1,h2,h3,.display{font-family:Fraunces,Georgia,serif;margin:0}
+button{font:inherit;cursor:pointer;border:0}
+.screen{max-width:520px;margin:0 auto;padding:18px 18px 40px}
+[hidden]{display:none!important}
+.muted{color:var(--muted)}
+.btn{display:block;width:100%;padding:16px;border-radius:14px;background:var(--terra);color:#fff;font-weight:600;font-size:18px}
+.btn:disabled{opacity:.45}
+.btn.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--line);font-size:16px;padding:12px}
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:14px}
+
+/* home */
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.brand{font-size:22px;color:var(--teal)}
+.iconbtn{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;color:var(--teal);font-weight:600;position:relative}
+.badge{position:absolute;top:-6px;right:-6px;background:var(--terra);color:#fff;border-radius:999px;font-size:11px;min-width:18px;padding:1px 5px}
+.badge:empty{display:none}
+.hero{background:var(--teal);color:#fff;border-radius:var(--r);padding:22px;position:relative;overflow:hidden}
+.hero::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;background:var(--gold);opacity:.9}
+.hero::before{content:"";position:absolute;right:30px;top:70px;width:70px;height:70px;border-radius:50%;background:var(--terra);opacity:.9}
+.hero>*{position:relative;z-index:1}
+.hero .num{font-size:13px;opacity:.8;letter-spacing:.02em}
+.hero h2{font-size:34px;margin:6px 0 2px}
+.hero .place{opacity:.85;margin-bottom:18px}
+.stats{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
+.journey{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 6px}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--line)}
+.dot.rev{border-radius:3px}
+.dot.done{background:var(--leaf)}
+.dot.now{background:var(--gold);box-shadow:0 0 0 3px #f2a54155}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.links button,.links a{background:none;color:var(--teal2);text-decoration:underline;padding:4px 0;font-size:14px}
+.warn{background:#fff3e6;border:1px solid #f2c48a;border-radius:12px;padding:12px;font-size:14px;margin-top:12px}
+
+/* session */
+.sbar{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted)}
+.progress{height:6px;background:var(--line);border-radius:3px;margin:8px 0 6px;overflow:hidden}
+.progress>div{height:100%;width:0;background:var(--gold);transition:width .5s}
+#phase{font-weight:600;color:var(--teal);font-size:15px;min-height:22px}
+.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:52vh;text-align:center;gap:18px}
+#orb{width:170px;height:170px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#3f7a76,var(--teal));box-shadow:0 10px 30px #1f3b3a33;position:relative;transition:transform .3s}
+#orb::after{content:"";position:absolute;inset:-12px;border-radius:50%;border:3px solid transparent}
+#orb[data-state=speak]{animation:pulse 1.1s ease-in-out infinite}
+#orb[data-state=listen]{background:radial-gradient(circle at 35% 30%,#e27a62,var(--terra))}
+#orb[data-state=listen]::after{border-color:#c8553d66;animation:ring 1.2s ease-out infinite}
+#orb[data-state=tap]{background:radial-gradient(circle at 35% 30%,#f6c27a,var(--gold))}
+@keyframes pulse{50%{transform:scale(1.06)}}
+@keyframes ring{from{transform:scale(.9);opacity:1}to{transform:scale(1.25);opacity:0}}
+.orbLabel{font-size:14px;color:var(--muted);min-height:20px}
+#es{font-family:Fraunces,Georgia,serif;font-size:30px;line-height:1.2;color:var(--ink);min-height:36px}
+#en{color:var(--muted);min-height:22px}
+#combo{font-family:Fraunces,serif;color:var(--terra);font-size:22px;min-height:28px}
+#tapBtn{position:fixed;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));transform:translateX(-50%);width:220px;padding:20px;border-radius:999px;background:var(--gold);color:var(--ink);font-weight:700;font-size:18px;box-shadow:0 8px 24px #0002}
+.controls{position:fixed;left:0;right:0;bottom:0;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(transparent,var(--paper) 30%)}
+.controls .row{max-width:520px;margin:0 auto}
+.overlay{position:fixed;inset:0;background:#1f3b3ae6;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:20;padding:24px;text-align:center}
+.overlay .btn{max-width:320px}
+#toast{position:fixed;top:calc(16px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;z-index:40}
+
+/* settings & feedback */
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin:14px 0}
+.card h3{font-size:18px;margin-bottom:10px;color:var(--teal)}
+.seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:4px}
+.seg button{flex:1;padding:10px;border-radius:9px;background:none;font-weight:600;color:var(--muted)}
+.seg button.sel{background:var(--teal);color:#fff}
+.voice{display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;width:100%;text-align:left;background:none;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px}
+.voice.sel{border-color:var(--teal);box-shadow:0 0 0 2px #1f3b3a22}
+.voice .vn{font-weight:600}
+.voice .vm{font-size:13px;color:var(--muted);grid-row:2}
+.voice .play{grid-row:1/3;grid-column:2;align-self:center;color:var(--terra)}
+label.sw{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+input[type=range]{width:100%}
+.mic{width:120px;height:120px;border-radius:50%;background:var(--terra);color:#fff;font-size:44px;margin:10px auto;display:block}
+.mic.on{animation:pulse 1s infinite;background:var(--leaf)}
+#fbHeard{min-height:48px;font-size:18px;text-align:center}
+#fbList{padding-left:18px}
+#fbList li{margin:8px 0}
+#fbList small{display:block;color:var(--muted)}
+textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line);padding:10px;font:13px monospace}
+.modal{position:fixed;inset:0;background:#0007;display:flex;align-items:flex-end;justify-content:center;z-index:30}
+.sheet{background:var(--paper);width:100%;max-width:520px;border-radius:22px 22px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto}
+.sheet h3{font-size:15px;margin:14px 0 4px;color:var(--teal)}
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<section id="home" class="screen">
+  <div class="top">
+    <div class="brand display">Habla<span style="color:var(--terra)">.</span></div>
+    <div class="row" style="flex:0 0 auto">
+      <button class="iconbtn" id="homeFb">Feedback<span class="badge" id="fbBadge"></span></button>
+      <button class="iconbtn" id="settingsBtn">Voices</button>
+    </div>
+  </div>
+  <div class="hero">
+    <div class="num" id="nextNum"></div>
+    <h2 id="nextTitle"></h2>
+    <div class="place" id="nextPlace"></div>
+    <button class="btn" id="startBtn">Start today's session</button>
+    <button class="btn ghost" id="restartBtn" style="margin-top:8px;color:#fff;border-color:#ffffff55" hidden>Restart this lesson</button>
+  </div>
+  <div class="stats">
+    <span class="chip">🔥 <b id="streak">0 days</b></span>
+    <span class="chip">⭐ <b id="xpTotal">0 pts</b></span>
+    <span class="chip">🧭 <b id="level">Turista</b></span>
+    <span class="chip">Coach <b id="coach">Lola</b></span>
+  </div>
+  <div class="muted" style="font-size:14px">Your trip · each dot is one 30-minute session (squares are review days)</div>
+  <div class="journey" id="journey"></div>
+  <div class="warn" id="srWarn" hidden>This browser can't listen. Open the app in <b>Safari</b> on your iPhone (or Chrome on a computer).</div>
+  <div class="links">
+    <button id="wnBtn">What's new</button>
+    <button id="backupBtn">Back up progress</button>
+    <button id="restoreBtn">Restore</button>
+    <a href="previous/">Use previous version</a>
+    <span class="muted" style="font-size:14px;padding:4px 0" id="ver"></span>
+  </div>
+  <input type="file" id="restoreFile" accept="application/json,.json" hidden>
+</section>
+
+<!-- SESSION -->
+<section id="session" class="screen" hidden>
+  <div class="sbar"><span id="timer">0:00 / 30:00</span><span id="xp">+0</span></div>
+  <div class="progress"><div id="bar"></div></div>
+  <div id="phase"></div>
+  <div class="stage">
+    <div id="orb" data-state="idle"></div>
+    <div id="combo"></div>
+    <div id="es"></div>
+    <div id="en"></div>
+  </div>
+  <button id="tapBtn" hidden>🎙 Tap, then speak</button>
+  <div class="controls"><div class="row">
+    <button class="btn ghost" id="homeBtn">Home</button>
+    <button class="btn ghost" id="sessFb">Feedback</button>
+    <button class="btn" id="pauseBtn" style="font-size:16px;padding:12px">Pause</button>
+  </div></div>
+  <div class="overlay" id="pauseOverlay" hidden>
+    <div class="display" style="font-size:30px">Pausa</div>
+    <div>Your place is saved.</div>
+    <button class="btn" id="resumeBig">Resume</button>
+  </div>
+</section>
+
+<!-- SETTINGS -->
+<section id="settings" class="screen" hidden>
+  <div class="top"><h2 style="color:var(--teal)">Voices & settings</h2><button class="iconbtn" id="setBack">Done</button></div>
+  <div class="card">
+    <h3>Coach voice</h3>
+    <div class="seg"><button data-gender="female">Female · Lola</button><button data-gender="male">Male · Leo</button></div>
+    <p class="muted" style="font-size:14px;margin:10px 0 0">Conversation scenes use a voice of the other gender for the other person. Tap a voice to hear it.</p>
+  </div>
+  <div class="card"><h3>Spanish voice</h3><div id="esVoices"></div>
+    <div class="warn" id="voiceTip" hidden>For a much nicer voice, download a free <b>Enhanced</b> or <b>Premium</b> Spanish (Mexico) voice: iPhone <b>Settings → Accessibility → Spoken Content → Voices → Spanish</b>. Then reopen the app.</div>
+    <div class="warn" id="noVoices" hidden>No voices loaded yet. Wait a moment or reopen this screen.</div>
+  </div>
+  <div class="card"><h3>English voice (instructions)</h3><div id="enVoices"></div></div>
+  <div class="card"><h3>Spanish speed · <span id="rateVal"></span></h3><input type="range" id="rate" min="0.6" max="1.2" step="0.05"></div>
+  <div class="card">
+    <label class="sw">Ears only (hide all text)<input type="checkbox" id="earsOnly"></label>
+    <label class="sw">Tap to talk (if hands-free listening doesn't work)<input type="checkbox" id="tapToTalk"></label>
+  </div>
+</section>
+
+<!-- FEEDBACK -->
+<section id="feedback" class="screen" hidden>
+  <div class="top"><h2 style="color:var(--teal)">Feedback</h2><button class="iconbtn" id="fbBack">Back</button></div>
+  <p class="muted">Tell me what to improve, in English: too fast, too easy, a word it keeps mishearing, anything. Each note is saved with the lesson you were on.</p>
+  <button class="mic" id="fbMic">🎙</button>
+  <div id="fbStatus" class="muted" style="text-align:center"></div>
+  <div id="fbHeard"></div>
+  <div class="card">
+    <h3 id="fbCount"></h3>
+    <ul id="fbList"></ul>
+    <button class="btn" id="fbSend">Send to Claude</button>
+    <p class="muted" style="font-size:13px">Opens the share sheet. Choose the Claude app and send it in your Spanish Voice Coach chat. It also includes automatic notes, such as phrases you keep missing.</p>
+    <textarea id="shareArea" hidden readonly></textarea>
+    <button class="btn ghost" id="fbClear" style="margin-top:8px">Clear sent notes</button>
+  </div>
+</section>
+
+<div class="modal" id="whatsnew" hidden><div class="sheet">
+  <h2 style="color:var(--teal)">What's new</h2>
+  <div id="wnList"></div>
+  <button class="btn" id="wnClose" style="margin-top:16px">¡Vamos!</button>
+</div></div>
+<div class="modal" id="alert" hidden><div class="sheet">
+  <p id="alertMsg"></p>
+  <button class="btn" id="alertClose">OK</button>
+</div></div>
+<div id="toast" hidden></div>
+
+<script src="curriculum.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
