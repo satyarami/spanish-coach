@@ -7,28 +7,28 @@ Nov 8, 2026 · Satya Rami
 
 ## Goal and learner
 
-The goal: after 6 months, hold a beginner to advanced-beginner conversation with native speakers and get your thoughts and ideas across, through 30 minutes a day of spoken practice only.
+The goal: after 6 months, hold a beginner to advanced-beginner conversation with native speakers and get your thoughts and ideas across, through 15 minutes a day of spoken practice only.
 
 - **Learner:** fluent English, already multilingual, close to zero Spanish. Comfortable with a phone, wants fun rather than drills.
-- **Time budget:** 30 minutes a day, about 180 sessions and 90 hours in total.
+- **Time budget:** 15 minutes a day (changed from 30), about 180 sessions and 45 hours in total. Spaced review carries more of the load, so the goal may take somewhat longer.
 - **What success looks like:** talking with native speakers about introductions, ordering food, directions, shopping, travel, making plans, telling what happened yesterday, giving opinions, and keeping a conversation going with fillers and follow-up questions. Getting your meaning across matters more than perfect grammar, including rephrasing when you don't know a word. Roughly CEFR A2.
 - **Spanish variety:** Latin American (Mexican) Spanish (confirmed).
 
-## Daily session (30 min) and quiz gate
+## Daily session (15 min) and quiz gate
 
-Every session is 25 minutes of spoken learning followed by a 5-minute spoken quiz. You must pass the quiz to unlock the next lesson.
+Every session is 15 minutes: about 11 minutes of spoken learning, then a spoken quiz of about 4 minutes. Each phrase is practised once in the lesson, with no extra repetition. You must pass the quiz to unlock the next lesson.
 
 | Part | Minutes | What happens |
 | --- | --- | --- |
-| Warm-up review | 5 | Phrases from earlier lessons come back on a spaced-repetition schedule. You hear English and say the Spanish. |
-| New material | 10 | 6 to 8 new phrases. You hear each one slowly, repeat it twice, and then recall it from the English cue alone. |
-| Conversation scene | 8 | A role-play, such as ordering at a café. The app plays the other person and you answer aloud. You play it once with hints and once without. |
-| Lightning round | 2 or more | A fast mix of today's and earlier phrases with combo scoring. It runs until the 25-minute mark. |
-| Quiz | 5 | 10 spoken questions: 6 from today and 4 from review. You hear English and say the Spanish, with one attempt per question. |
+| Warm-up review | 1–2 | Up to 4 phrases from earlier lessons, on a spaced-repetition schedule. You hear English and say the Spanish. |
+| New material | 4–5 | 6 to 8 new phrases. You hear each one once and repeat it once. It is replayed only if you miss. |
+| Conversation scene | 2–3 | A role-play, such as ordering at a café. The app plays the other person and you answer aloud, once. Help comes only when you miss. |
+| Lightning round | 0–2 | A fast mix of today's and earlier phrases, only if time is left before minute 11. |
+| Quiz | 4 | 10 spoken questions: 6 from today and 4 from review. You hear English and say the Spanish, with one attempt per question. |
 
 ```mermaid
 flowchart LR
-  A[Warm-up review<br/>5 min] --> B[New phrases<br/>10 min] --> C[Conversation scene<br/>8 min] --> D[Lightning round<br/>to the 25-min mark] --> E[Spoken quiz<br/>5 min, 10 questions]
+  A[Warm-up review<br/>1–2 min] --> B[New phrases<br/>4–5 min, hear once] --> C[Conversation scene<br/>2–3 min] --> D[Lightning round<br/>only if time left] --> E[Spoken quiz<br/>4 min, 10 questions]
   E --> F{8 of 10?}
   F -- yes --> G[Next lesson unlocked<br/>streak +1]
   F -- no --> H[Review misses<br/>3 min] -- retake --> E
