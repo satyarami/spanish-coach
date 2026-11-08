@@ -2,8 +2,16 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.7.1';
 const CHANGELOG = [
+  { v: '1.7.1', date: '2026-11-08', items: [
+    'Updates never send you back to lesson 1: your place is now stored by lesson name, and a copy of your progress is kept before each update.'
+  ] },
+  { v: '1.7.0', date: '2026-11-08', items: [
+    'The coach asks your name once, at the start of your first session, and remembers it.',
+    'It says your name back and checks it sounds right. If not, spell it the way it sounds and it tries again.',
+    'Every cheer now uses your name ("¡Muy bien, Satya!"). Change your name any time in Settings.'
+  ] },
   { v: '1.6.0', date: '2026-11-08', items: [
     '15-minute sessions with less repetition: each new phrase is heard once and repeated once, the scene is played once, and the extra "from memory" round is gone.',
     'Warm-up is up to 4 old phrases; the lightning round only runs if there is time before minute 11; the quiz is unchanged (10 questions, pass 8).'
@@ -70,8 +78,8 @@ LESSONS.forEach((L, li) => L.items.forEach((it, n) => {
 }));
 const SCHEDULE = [];
 LESSONS.forEach((L, i) => {
-  SCHEDULE.push({ kind: 'lesson', li: i });
-  if ((i + 1) % 5 === 0) SCHEDULE.push({ kind: 'review', from: i - 4, to: i });
+  SCHEDULE.push({ kind: 'lesson', li: i, id: L.id });
+  if ((i + 1) % 5 === 0) SCHEDULE.push({ kind: 'review', from: i - 4, to: i, id: 'rev-' + LESSONS[i - 4].id + '-' + L.id });
 });
 const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 
@@ -79,16 +87,62 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
   settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null, gpu: false },
-  session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
+  user: null, session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
 let S;
-function load() {
-  try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(DEFAULT(), JSON.parse(raw)) : DEFAULT(); }
-  catch (e) { S = DEFAULT(); }
-  S.settings = Object.assign(DEFAULT().settings, S.settings || {});
-  S.auto = Object.assign(DEFAULT().auto, S.auto || {});
+// Progress must survive every update. Rules: never reset progress on upgrade; keep a backup of the
+// saved data before a new version touches it; store the position by lesson id (not index) so the
+// curriculum can grow; drop only an in-progress session that no longer matches the curriculum.
+const SCHEMA = 2;
+function migrate(d) {
+  d.settings = Object.assign(DEFAULT().settings, d.settings || {});
+  d.auto = Object.assign(DEFAULT().auto, d.auto || {});
+  if (!d.srs || typeof d.srs !== 'object') d.srs = {};
+  if (!Array.isArray(d.history)) d.history = [];
+  if (!Array.isArray(d.feedback)) d.feedback = [];
+  // Position: prefer the lesson id; fall back to the old index.
+  let pos = -1;
+  if (d.posId === 'done' && d.lastPassedId) { const i = SCHEDULE.findIndex(u => u.id === d.lastPassedId); pos = i >= 0 ? i + 1 : SCHEDULE.length; }
+  else if (d.posId) pos = SCHEDULE.findIndex(u => u.id === d.posId);
+  if (pos < 0) pos = Math.max(0, Math.min(Number(d.pos) || 0, SCHEDULE.length));
+  d.pos = pos;
+  d.posId = SCHEDULE[pos] ? SCHEDULE[pos].id : 'done';
+  // In-progress session: keep it if it is for the current lesson; remove steps for phrases that no longer exist.
+  if (d.session) {
+    const sp = d.session;
+    if (sp.posId === undefined) sp.posId = sp.pos === pos ? d.posId : null;
+    if (sp.posId !== d.posId || !Array.isArray(sp.steps)) d.session = null;
+    else {
+      const before = sp.steps.length;
+      sp.steps = sp.steps.filter(st => !st.k || ITEMS[st.k]);
+      if (sp.steps.length !== before) sp.idx = Math.min(sp.idx, sp.steps.length - 1);
+      sp.pos = pos;
+      if (Array.isArray(sp.today)) sp.today = sp.today.filter(k => ITEMS[k]);
+    }
+  }
+  d.schema = SCHEMA;
+  return d;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function load() {
+  let raw = null, d = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) {}
+  if (raw) {
+    try { d = JSON.parse(raw); } catch (e) {
+      // Unreadable: keep it aside (never overwrite it) and try the last backup.
+      try { localStorage.setItem(KEY + '.unreadable', raw); } catch (_) {}
+      try { const b = localStorage.getItem(KEY + '.backup'); if (b) d = JSON.parse(b); } catch (_) { d = null; }
+    }
+  }
+  S = Object.assign(DEFAULT(), d || {});
+  // Before a new version changes anything, keep a copy of the data as it was.
+  if (raw && d && S.seenVersion !== APP_VERSION) { try { localStorage.setItem(KEY + '.backup', raw); } catch (e) {} }
+  migrate(S);
+}
+function save() {
+  S.posId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done';
+  if (S.session && S.session.posId === undefined) S.session.posId = S.posId;
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
 
 // ---------- text matching ----------
 const ONES = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciseis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidos','veintitres','veinticuatro','veinticinco','veintiseis','veintisiete','veintiocho','veintinueve'];
@@ -244,6 +298,14 @@ const en = t => speak(t, 'en');
 const PRAISE = ['¡Muy bien!', '¡Perfecto!', '¡Eso es!', '¡Excelente!', '¡Qué bien!', '¡Bravo!', '¡Fantástico!', '¡Genial!', '¡Correcto!', '¡Así se dice!', '¡Muy bien dicho!', '¡Impecable!', '¡Me encanta!', '¡Súper!', '¡Lo tienes!'];
 const QUICK = ['¡Bien!', '¡Sí!', '¡Correcto!', '¡Eso!', '¡Muy bien!', '¡Perfecto!'];
 const NEAR = ['Casi.', 'Good try.', 'Almost there.', 'Close!', 'Nice effort.'];
+// The learner's name, spelled the way the coach should pronounce it.
+const userSay = () => (S.user && S.user.confirmed && (S.user.say || S.user.name)) || '';
+// "¡Muy bien!" -> "¡Muy bien, Satya!"; "¡Cinco seguidas! ¡Increíble!" -> "... ¡Increíble, Satya!"
+function withName(line) {
+  const n = userSay(); if (!n) return line;
+  const m = line.match(/^(.*?)([!.?]*)$/);
+  return m[1].replace(/[,\s]+$/, '') + ', ' + n + (m[2] || '!');
+}
 let lastPraise = '';
 function praiseLine(list) { let p; do { p = pick(list); } while (p === lastPraise && list.length > 1); lastPraise = p; return p; }
 // Spoken encouragement after a correct answer: always something, with extra at streak milestones.
@@ -252,9 +314,9 @@ async function cheer(quick) {
   const pitch = 1 + (Math.random() * 0.15 - 0.03);
   if (!quick && [3, 5, 10, 15, 20].includes(c)) {
     const big = { 3: '¡Tres seguidas!', 5: '¡Cinco seguidas! ¡Increíble!', 10: '¡Diez seguidas! ¡Eres una estrella!', 15: '¡Quince! ¡Imparable!', 20: '¡Veinte seguidas! ¡Campeón!' }[c];
-    FX.level(); await speak(big, 'es', 1.05, pitch); return;
+    FX.level(); await speak(withName(big), 'es', 1.05, pitch); return;
   }
-  await speak(praiseLine(quick ? QUICK : PRAISE), 'es', 1.05, pitch);
+  await speak(withName(praiseLine(quick ? QUICK : PRAISE)), 'es', 1.05, pitch);
 }
 
 // ---------- on-device speech recognition (Whisper) ----------
@@ -494,7 +556,7 @@ function planSession() {
   });
   steps.push({ t: 'lightning' });
   steps.push({ t: 'quiz' });
-  return { pos: S.pos, steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
+  return { pos: S.pos, posId: SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
 }
 function today_() { return today(); }
 
@@ -506,14 +568,14 @@ async function stepIntro() {
     const L = LESSONS[unit.li];
     setPhase('Lesson ' + (unit.li + 1) + ' · ' + L.title);
     showText(L.title, L.place);
-    await say('¡Hola! Soy ' + coachName() + '.', 1);
+    await say(withName('¡Hola!') + ' Soy ' + coachName() + '.', 1);
     await en('Lesson ' + (unit.li + 1) + '. ' + L.place + '.');
     await en(L.tip);
     if (S.pos === 0) await en('Answer out loud after the beep. Say "repite" to hear something again, or "no sé" if you don\'t know.');
   } else {
     setPhase('Review day');
     showText('Repaso', 'Review and conversation day');
-    await say('¡Hola! Hoy es día de repaso.');
+    await say(withName('¡Hola!') + ' Hoy es día de repaso.');
     await en('Review day. No new words today. We practise what you know and have two conversations.');
   }
 }
@@ -676,17 +738,112 @@ async function pass(score) {
   }
   addXP(100);
   st.today.forEach(k => { if (S.srs[k] && S.srs[k].box < 1) S.srs[k] = { box: 1, due: new Date(Date.now() + 864e5).toISOString().slice(0, 10) }; });
+  S.lastPassedId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : S.lastPassedId;
   S.pos = Math.min(S.pos + 1, SCHEDULE.length);
   S.session = null; save();
-  await say('¡Felicidades! ¡Lo lograste!');
+  await say(withName('¡Felicidades!') + ' ¡Lo lograste!');
   await en(score + ' out of ten. Next lesson unlocked. Your streak is ' + S.streak + (S.streak === 1 ? ' day.' : ' days.'));
   throw QUIT;
 }
 
+// ---------- your name (asked once) ----------
+const nameUI = { resolve: null };
+function nameWait() { return new Promise(r => { nameUI.resolve = r; }); }
+async function nameWaitC() { const v = await nameWait(); check(); return v; }
+function stopListening() {
+  if (run.rec) try { run.rec.abort(); } catch (e) {}
+  if (run.stopRec) run.stopRec();
+  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
+}
+function nameUIClick(v) { if (nameUI.resolve) { const r = nameUI.resolve; nameUI.resolve = null; r(v); } }
+function cleanName(t) {
+  t = String(t || '').replace(/[.,!?¡¿"“”]/g, ' ').replace(/\s+/g, ' ').trim();
+  t = t.replace(/^(hi|hello|hola|ok|okay|um+|uh+)\s+/i, '')
+       .replace(/^(my name is|my name's|i am|i'm|im|it's|its|it is|call me|this is|me llamo|mi nombre es|soy)\s+/i, '');
+  return t.split(' ').slice(0, 3).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+function yesNo(alts) {
+  for (const a of alts) {
+    const h = ' ' + norm(a) + ' ';
+    if (/ (no|nope|wrong|not quite|not really|incorrect|try again) /.test(h)) return 'no';
+    if (/ (yes|yeah|yep|yup|si|correct|right|perfect|perfecto|exactly|good|great|sure|exacto) /.test(h)) return 'yes';
+  }
+  return null;
+}
+// Listen by voice while also accepting a tap on one of the panel's buttons; whichever comes first.
+async function voiceOrTap(lang, parse) {
+  const tap = nameWait();
+  let tapped = null; tap.then(v => { tapped = v; stopListening(); });
+  const heard = listen(lang).then(r => parse(r.alts), e => { if (tapped === null) throw e; return null; });
+  const v = await Promise.race([tap, heard]);
+  if (tapped !== null) { await heard.catch(() => {}); return { tap: tapped }; }
+  nameUI.resolve = null;
+  return { voice: v };
+}
+function namePanel(mode) {
+  $('#namePanel').hidden = !mode;
+  $('#nameAsk').hidden = mode !== 'ask';
+  $('#nameConfirm').hidden = mode !== 'confirm';
+  $('#sayRow').hidden = !(mode === 'fix' || (mode === 'confirm' && $('#sayIn').value.trim()));
+  if (mode === 'fix') { $('#nameAsk').hidden = false; $('#nameGo').textContent = 'Try again'; }
+  else $('#nameGo').textContent = 'Continue';
+}
+async function stepName() {
+  setPhase('Welcome'); clearText();
+  const u = S.user || {};
+  $('#nameIn').value = u.name || ''; $('#sayIn').value = u.say && u.say !== u.name ? u.say : '';
+  let name = '', sayFor = u.name || '';
+  // 1. Ask the name.
+  namePanel('ask');
+  await en("Hi! I'm " + coachName() + ". Before we start, what's your name? Say it after the beep, or type it below.");
+  for (let i = 0; i < 2 && !name; i++) {
+    const r = await voiceOrTap('en-US', alts => cleanName(alts[0]));
+    if (r.tap === 'go') name = cleanName($('#nameIn').value);
+    else if (r.voice) { $('#nameIn').value = r.voice; name = r.voice; }
+    else if (i === 0) await en("I didn't catch that. Please say your name again, or type it.");
+  }
+  while (!name) {
+    await en('Type your name below, then tap Continue.');
+    if ((await nameWaitC()) === 'go') name = cleanName($('#nameIn').value);
+  }
+  // 2. Say it back and confirm; fix with a sounds-like spelling until it's right.
+  while (true) {
+    name = cleanName($('#nameIn').value) || name;
+    if (name !== sayFor) { $('#sayIn').value = ''; sayFor = name; }   // a sounds-like spelling only belongs to the name it was typed for
+    const sayAs = $('#sayIn').value.trim() || name;
+    showText(name, '');
+    namePanel('confirm');
+    await say('¡Hola, ' + sayAs + '!', 0.95);
+    await en('Did I say your name right? Say yes or no.');
+    let ans = null;
+    for (let i = 0; i < 2 && !ans; i++) {
+      const r = await voiceOrTap('en-US', yesNo);
+      ans = r.tap || r.voice;
+      if (!ans && i === 0) await en('Sorry, was that yes or no? You can also tap a button.');
+    }
+    if (!ans) ans = await nameWaitC();
+    if (ans === 'yes') {
+      S.user = { name, say: sayAs, confirmed: true, at: new Date().toISOString() }; save();
+      namePanel(null);
+      FX.good();
+      await say('¡Mucho gusto, ' + sayAs + '!');
+      return;
+    }
+    if (ans === 'go') continue;
+    // No: get a spelling that sounds right.
+    namePanel('fix');
+    await en("Sorry! Type your name the way it sounds, for example Sah-tee-ah, then tap Try again. You can also fix the spelling above.");
+    $('#sayIn').focus();
+    while ((await nameWaitC()) !== 'go') {}
+    sayFor = cleanName($('#nameIn').value) || name;
+  }
+}
+const needName = () => !(S.user && S.user.confirmed && S.user.name);
+
 // ---------- main loop ----------
 let tick = null;
-async function runSession() {
-  run = { active: true, paused: false, quit: false, rec: null, tapResolve: null };
+async function runSession(nameOnly) {
+  run = { active: true, paused: false, quit: false, rec: null, tapResolve: null, setup: false };
   sentFirstHint = 0;
   show('session'); $('#pauseBtn').textContent = 'Pause'; $('#pauseOverlay').hidden = true;
   $('#xp').textContent = '+' + (S.session.xp || 0); $('#combo').textContent = '';
@@ -694,10 +851,23 @@ async function runSession() {
   clearInterval(tick);
   tick = setInterval(() => {
     const now = Date.now();
-    if (run.active && !run.paused && S.session) { S.session.activeMs += now - last; $('#timer').textContent = fmt(S.session.activeMs) + ' / ' + SESSION_MIN + ':00'; $('#bar').style.width = Math.min(100, S.session.activeMs / (SESSION_MIN * 600)) + '%'; }
+    if (run.active && !run.paused && !run.setup && S.session) { S.session.activeMs += now - last; $('#timer').textContent = fmt(S.session.activeMs) + ' / ' + SESSION_MIN + ':00'; $('#bar').style.width = Math.min(100, S.session.activeMs / (SESSION_MIN * 600)) + '%'; }
     last = now;
   }, 500);
-  while (S.session && S.session.idx < S.session.steps.length) {
+  if (nameOnly || needName()) {
+    run.setup = true;
+    while (!run.quit) {
+      try { await stepName(); break; }
+      catch (e) {
+        if (e === PAUSED) { await waitResume(); continue; }
+        if (e === QUIT) break;
+        console.error(e); break;
+      }
+    }
+    run.setup = false; namePanel(null);
+    if (nameOnly) run.quit = true;
+  }
+  while (!run.quit && S.session && S.session.idx < S.session.steps.length) {
     const st = S.session.steps[S.session.idx];
     try {
       if (st.t === 'intro') await stepIntro();
@@ -743,6 +913,7 @@ function quitSession() {
   if (run.rec) try { run.rec.abort(); } catch (e) {}
   if (run.stopRec) run.stopRec();
   if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
+  nameUIClick('quit');
   if (run.paused) { run.paused = false; if (run.resume) { const r = run.resume; run.resume = null; r(); } }
   if (!run.active) { renderHome(); show('home'); }
 }
@@ -875,7 +1046,7 @@ async function backup() {
 function restore(file) {
   const r = new FileReader();
   r.onload = () => {
-    try { const d = JSON.parse(r.result); if (typeof d.pos !== 'number' || !d.srs) throw 0; delete d.backupAt; delete d.app; S = Object.assign(DEFAULT(), d); save(); renderHome(); toast('Progress restored'); }
+    try { const d = JSON.parse(r.result); if (typeof d.pos !== 'number' || !d.srs) throw 0; delete d.backupAt; delete d.app; S = migrate(Object.assign(DEFAULT(), d)); save(); renderHome(); toast('Progress restored'); }
     catch (e) { alertBox("That file doesn't look like a Spanish Voice Coach backup."); }
   };
   r.readAsText(file);
@@ -885,6 +1056,7 @@ function restore(file) {
 function renderSettings() {
   refreshVoices();
   const st = S.settings;
+  $('#nameNow').textContent = S.user && S.user.name ? S.user.name + (S.user.say && S.user.say !== S.user.name ? ' (said “' + S.user.say + '”)' : '') : 'Not set yet';
   document.querySelectorAll('[data-gender]').forEach(b => b.classList.toggle('sel', b.dataset.gender === st.gender));
   fillVoiceList('#esVoices', 'es', st.esVoice, uri => { st.esVoice = uri; save(); });
   fillVoiceList('#enVoices', 'en', st.enVoice, uri => { st.enVoice = uri; save(); });
@@ -976,6 +1148,11 @@ function init() {
   $('#fbShare').onclick = sendFeedback;
   $('#fbSave').onclick = () => { const t = $('#fbText').value.trim(); if (!t) return; S.feedback.push({ at: new Date().toISOString(), v: APP_VERSION, where: fbContext(), text: t }); save(); $('#fbText').value = ''; renderFeedbackList(); renderHome(); toast('Note saved'); };
   $('#fbClear').onclick = () => { if ($('#fbClear').dataset.arm) { S.feedback = []; S.auto = DEFAULT().auto; save(); renderFeedbackList(); delete $('#fbClear').dataset.arm; $('#fbClear').textContent = 'Clear sent notes'; } else { $('#fbClear').dataset.arm = 1; $('#fbClear').textContent = 'Tap again to clear'; } };
+  $('#nameGo').onclick = () => nameUIClick('go');
+  $('#nameYes').onclick = () => nameUIClick('yes');
+  $('#nameNo').onclick = () => nameUIClick('no');
+  $('#nameIn').onkeydown = $('#sayIn').onkeydown = e => { if (e.key === 'Enter') { e.target.blur(); nameUIClick('go'); } };
+  $('#nameChange').onclick = () => { if (run.active) return; unlockAudio(); if (engine() === 'ondevice') asrStart(); runSession(true); };
   $('#settingsBtn').onclick = () => { renderSettings(); show('settings'); };
   $('#setBack').onclick = () => { renderHome(); show('home'); };
   document.querySelectorAll('[data-gender]').forEach(b => b.onclick = () => { S.settings.gender = b.dataset.gender; S.settings.esVoice = null; S.settings.enVoice = null; save(); renderSettings(); const v = chooseVoice('es', S.settings.gender, null); if (v) preview(v, 'es'); });
@@ -998,6 +1175,6 @@ function init() {
   whatsNew(false);
   if (engine() === 'ondevice') asrStart();
 }
-window.SVC = { norm, score, numES, SCHEDULE, ITEMS, planSession: () => planSession(), _state: () => S, _load: load };
+window.SVC = { migrate, KEY, norm, score, numES, SCHEDULE, ITEMS, planSession: () => planSession(), _state: () => S, _load: load };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
