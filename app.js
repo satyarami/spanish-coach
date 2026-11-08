@@ -2,8 +2,11 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 const CHANGELOG = [
+  { v: '1.7.1', date: '2026-11-08', items: [
+    'Updates never send you back to lesson 1: your place is now stored by lesson name, and a copy of your progress is kept before each update.'
+  ] },
   { v: '1.7.0', date: '2026-11-08', items: [
     'The coach asks your name once, at the start of your first session, and remembers it.',
     'It says your name back and checks it sounds right. If not, spell it the way it sounds and it tries again.',
@@ -75,8 +78,8 @@ LESSONS.forEach((L, li) => L.items.forEach((it, n) => {
 }));
 const SCHEDULE = [];
 LESSONS.forEach((L, i) => {
-  SCHEDULE.push({ kind: 'lesson', li: i });
-  if ((i + 1) % 5 === 0) SCHEDULE.push({ kind: 'review', from: i - 4, to: i });
+  SCHEDULE.push({ kind: 'lesson', li: i, id: L.id });
+  if ((i + 1) % 5 === 0) SCHEDULE.push({ kind: 'review', from: i - 4, to: i, id: 'rev-' + LESSONS[i - 4].id + '-' + L.id });
 });
 const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 
@@ -87,13 +90,59 @@ const DEFAULT = () => ({
   user: null, session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
 let S;
-function load() {
-  try { const raw = localStorage.getItem(KEY); S = raw ? Object.assign(DEFAULT(), JSON.parse(raw)) : DEFAULT(); }
-  catch (e) { S = DEFAULT(); }
-  S.settings = Object.assign(DEFAULT().settings, S.settings || {});
-  S.auto = Object.assign(DEFAULT().auto, S.auto || {});
+// Progress must survive every update. Rules: never reset progress on upgrade; keep a backup of the
+// saved data before a new version touches it; store the position by lesson id (not index) so the
+// curriculum can grow; drop only an in-progress session that no longer matches the curriculum.
+const SCHEMA = 2;
+function migrate(d) {
+  d.settings = Object.assign(DEFAULT().settings, d.settings || {});
+  d.auto = Object.assign(DEFAULT().auto, d.auto || {});
+  if (!d.srs || typeof d.srs !== 'object') d.srs = {};
+  if (!Array.isArray(d.history)) d.history = [];
+  if (!Array.isArray(d.feedback)) d.feedback = [];
+  // Position: prefer the lesson id; fall back to the old index.
+  let pos = -1;
+  if (d.posId === 'done' && d.lastPassedId) { const i = SCHEDULE.findIndex(u => u.id === d.lastPassedId); pos = i >= 0 ? i + 1 : SCHEDULE.length; }
+  else if (d.posId) pos = SCHEDULE.findIndex(u => u.id === d.posId);
+  if (pos < 0) pos = Math.max(0, Math.min(Number(d.pos) || 0, SCHEDULE.length));
+  d.pos = pos;
+  d.posId = SCHEDULE[pos] ? SCHEDULE[pos].id : 'done';
+  // In-progress session: keep it if it is for the current lesson; remove steps for phrases that no longer exist.
+  if (d.session) {
+    const sp = d.session;
+    if (sp.posId === undefined) sp.posId = sp.pos === pos ? d.posId : null;
+    if (sp.posId !== d.posId || !Array.isArray(sp.steps)) d.session = null;
+    else {
+      const before = sp.steps.length;
+      sp.steps = sp.steps.filter(st => !st.k || ITEMS[st.k]);
+      if (sp.steps.length !== before) sp.idx = Math.min(sp.idx, sp.steps.length - 1);
+      sp.pos = pos;
+      if (Array.isArray(sp.today)) sp.today = sp.today.filter(k => ITEMS[k]);
+    }
+  }
+  d.schema = SCHEMA;
+  return d;
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+function load() {
+  let raw = null, d = null;
+  try { raw = localStorage.getItem(KEY); } catch (e) {}
+  if (raw) {
+    try { d = JSON.parse(raw); } catch (e) {
+      // Unreadable: keep it aside (never overwrite it) and try the last backup.
+      try { localStorage.setItem(KEY + '.unreadable', raw); } catch (_) {}
+      try { const b = localStorage.getItem(KEY + '.backup'); if (b) d = JSON.parse(b); } catch (_) { d = null; }
+    }
+  }
+  S = Object.assign(DEFAULT(), d || {});
+  // Before a new version changes anything, keep a copy of the data as it was.
+  if (raw && d && S.seenVersion !== APP_VERSION) { try { localStorage.setItem(KEY + '.backup', raw); } catch (e) {} }
+  migrate(S);
+}
+function save() {
+  S.posId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done';
+  if (S.session && S.session.posId === undefined) S.session.posId = S.posId;
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+}
 
 // ---------- text matching ----------
 const ONES = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve','diez','once','doce','trece','catorce','quince','dieciseis','diecisiete','dieciocho','diecinueve','veinte','veintiuno','veintidos','veintitres','veinticuatro','veinticinco','veintiseis','veintisiete','veintiocho','veintinueve'];
@@ -507,7 +556,7 @@ function planSession() {
   });
   steps.push({ t: 'lightning' });
   steps.push({ t: 'quiz' });
-  return { pos: S.pos, steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
+  return { pos: S.pos, posId: SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
 }
 function today_() { return today(); }
 
@@ -689,6 +738,7 @@ async function pass(score) {
   }
   addXP(100);
   st.today.forEach(k => { if (S.srs[k] && S.srs[k].box < 1) S.srs[k] = { box: 1, due: new Date(Date.now() + 864e5).toISOString().slice(0, 10) }; });
+  S.lastPassedId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : S.lastPassedId;
   S.pos = Math.min(S.pos + 1, SCHEDULE.length);
   S.session = null; save();
   await say(withName('¡Felicidades!') + ' ¡Lo lograste!');
@@ -996,7 +1046,7 @@ async function backup() {
 function restore(file) {
   const r = new FileReader();
   r.onload = () => {
-    try { const d = JSON.parse(r.result); if (typeof d.pos !== 'number' || !d.srs) throw 0; delete d.backupAt; delete d.app; S = Object.assign(DEFAULT(), d); save(); renderHome(); toast('Progress restored'); }
+    try { const d = JSON.parse(r.result); if (typeof d.pos !== 'number' || !d.srs) throw 0; delete d.backupAt; delete d.app; S = migrate(Object.assign(DEFAULT(), d)); save(); renderHome(); toast('Progress restored'); }
     catch (e) { alertBox("That file doesn't look like a Spanish Voice Coach backup."); }
   };
   r.readAsText(file);
@@ -1125,6 +1175,6 @@ function init() {
   whatsNew(false);
   if (engine() === 'ondevice') asrStart();
 }
-window.SVC = { norm, score, numES, SCHEDULE, ITEMS, planSession: () => planSession(), _state: () => S, _load: load };
+window.SVC = { migrate, KEY, norm, score, numES, SCHEDULE, ITEMS, planSession: () => planSession(), _state: () => S, _load: load };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
