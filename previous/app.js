@@ -2,8 +2,16 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.9.0';
 const CHANGELOG = [
+  { v: '1.9.0', date: '2026-11-08', items: [
+    'Learn Gujarati too: pick the language on the home screen. Each language keeps its own lessons, streak and points.',
+    'Gujarati block 1: 10 lessons and 2 review days on a trip to Ahmedabad, spoken by Lekha, with Gujarati script and a romanized form.'
+  ] },
+  { v: '1.8.0', date: '2026-11-08', items: [
+    '⏪ 30s and 30s ⏩ buttons during a session (not inside the quiz).',
+    'Lessons menu: replay any lesson you have passed as practice, continue your current lesson where you left off; lessons you have not passed stay locked.'
+  ] },
   { v: '1.7.1', date: '2026-11-08', items: [
     'Updates never send you back to lesson 1: your place is now stored by lesson name, and a copy of your progress is kept before each update.'
   ] },
@@ -69,8 +77,31 @@ const dayNum = s => Math.round(Date.parse(s + 'T12:00:00') / 864e5);
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const pick = a => a[Math.floor(Math.random() * a.length)];
 
+// ---------- language ----------
+// The active language is read before anything else, because the curriculum depends on it.
+const ACTIVE = (() => { try { const d = JSON.parse(localStorage.getItem('svc.state') || '{}'); return d && d.lang === 'gu' ? 'gu' : 'es'; } catch (e) { return 'es'; } })();
+const GU = ACTIVE === 'gu';
+const LANGS = {
+  es: { code: 'es', name: 'Spanish', native: 'Español', listen: 'es-MX', asr: 'spanish', brand: 'Habla' },
+  gu: { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી', listen: 'gu-IN', asr: 'gujarati', brand: 'Bolo' }
+};
+const LP = LANGS[ACTIVE];
+// Gujarati and Devanagari letters line up one-to-one (offset 0x180), so the Hindi voice can read Gujarati.
+const guToDeva = t => String(t).replace(/[\u0A80-\u0AFF]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x180));
+const ROM = {};   // Gujarati text -> romanized form (for display)
+function normGuLesson(L) {
+  return Object.assign({}, L, {
+    items: L.items.map(it => { const [en, rom, ...gu] = it; ROM[gu[0]] = rom; ROM[gu[0].replace(/\s*…\s*/g, ' ').trim()] = rom; return [en, ...gu]; }),
+    scene: Object.assign({}, L.scene, { lines: L.scene.lines.map(l => {
+      if (l[0] === 'p') { ROM[l[1]] = l[3]; return ['p', l[1], l[2]]; }
+      ROM[l[3]] = l[2]; ROM[l[3].replace(/\s*…\s*/g, ' ').trim()] = l[2]; return ['y', l[1], ...l.slice(3)];
+    }) })
+  });
+}
+const romOf = t => ROM[t] || ROM[String(t || '').replace(/\s*…\s*/g, ' ').trim()] || '';
+
 // ---------- curriculum & schedule ----------
-const LESSONS = window.CURRICULUM;
+const LESSONS = GU ? (window.CURRICULUM_GU || []).map(normGuLesson) : window.CURRICULUM;
 const ITEMS = {};                     // key -> {en, answers[], say, lesson}
 LESSONS.forEach((L, li) => L.items.forEach((it, n) => {
   const [en, ...es] = it;
@@ -86,6 +117,7 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 // ---------- state ----------
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
+  lang: 'es', langs: {},
   settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null, gpu: false },
   user: null, session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
@@ -95,6 +127,8 @@ let S;
 // curriculum can grow; drop only an in-progress session that no longer matches the curriculum.
 const SCHEMA = 2;
 function migrate(d) {
+  if (d.lang !== 'gu') d.lang = 'es';
+  if (!d.langs || typeof d.langs !== 'object') d.langs = {};
   d.settings = Object.assign(DEFAULT().settings, d.settings || {});
   d.auto = Object.assign(DEFAULT().auto, d.auto || {});
   if (!d.srs || typeof d.srs !== 'object') d.srs = {};
@@ -107,6 +141,8 @@ function migrate(d) {
   if (pos < 0) pos = Math.max(0, Math.min(Number(d.pos) || 0, SCHEDULE.length));
   d.pos = pos;
   d.posId = SCHEDULE[pos] ? SCHEDULE[pos].id : 'done';
+  if (d.session && d.session.practice) d.session = d.mainSession || null;
+  d.mainSession = null;
   // In-progress session: keep it if it is for the current lesson; remove steps for phrases that no longer exist.
   if (d.session) {
     const sp = d.session;
@@ -156,7 +192,30 @@ function numES(n) {
   if (n < 1000000) { const k = Math.floor(n / 1000); return (k === 1 ? 'mil' : numES(k) + ' mil') + (n % 1000 ? ' ' + numES(n % 1000) : ''); }
   return String(n);
 }
+// Gujarati (or Hindi script, or English letters) -> a rough sound key, so answers match whatever script the listener writes.
+const GU_CONS = { 'ક':'k','ખ':'k','ગ':'g','ઘ':'g','ઙ':'n','ચ':'c','છ':'c','જ':'j','ઝ':'j','ઞ':'n','ટ':'t','ઠ':'t','ડ':'d','ઢ':'d','ણ':'n','ત':'t','થ':'t','દ':'d','ધ':'d','ન':'n','પ':'p','ફ':'p','બ':'b','ભ':'b','મ':'m','ય':'y','ર':'r','લ':'l','ળ':'l','વ':'v','શ':'s','ષ':'s','સ':'s','હ':'h' };
+const GU_VOW = { 'અ':'', 'આ':'', 'ા':'', 'ઇ':'i','ઈ':'i','િ':'i','ી':'i','ઉ':'u','ઊ':'u','ુ':'u','ૂ':'u','એ':'e','ઐ':'e','ે':'e','ૈ':'e','ઍ':'e','ૅ':'e','ઓ':'o','ઔ':'o','ો':'o','ૌ':'o','ૉ':'o','ઑ':'o','ઋ':'ri','ૃ':'ri' };
+function guKey(s) {
+  s = String(s).toLowerCase().replace(/[\u0900-\u097F]/g, c => c === '।' || c === '॥' ? ' ' : String.fromCharCode(c.charCodeAt(0) + 0x180));
+  let out = '';
+  for (const ch of s) {
+    if (GU_CONS[ch] !== undefined) out += GU_CONS[ch];
+    else if (GU_VOW[ch] !== undefined) out += GU_VOW[ch];
+    else if (/[\u0A80-\u0AFF]/.test(ch)) { /* anusvara, virama, nukta, visarga: no sound key */ }
+    else out += ch;
+  }
+  out = out.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[¿¡?!.,;:"'()«»\-–—]/g, ' ')
+    .replace(/chh|ch/g, 'c').replace(/sh/g, 's').replace(/([kgcjtdpb])h/g, '$1')
+    .replace(/ee/g, 'i').replace(/oo/g, 'u').replace(/w/g, 'v').replace(/z/g, 'j').replace(/f/g, 'p').replace(/q/g, 'k').replace(/x/g, 'ks')
+    .replace(/a/g, '').replace(/([a-z])\1+/g, '$1');
+  return out.replace(/\s+/g, ' ').trim();
+}
 function norm(s) {
+  if (GU) return guKey(s);
+  return normEs(s);
+}
+function normEs(s) {
   return String(s).toLowerCase()
     .replace(/(\d+):00/g, '$1').replace(/(\d+):30/g, '$1 y media')
     .replace(/[$,](?=\d)/g, '')
@@ -210,7 +269,17 @@ const CMD = {
   pause: ['pausa', 'pause'],
   feedback: ['comentario', 'feedback']
 };
+if (GU) {
+  CMD.repeat.push('fari bolo', 'fari', 'ફરી બોલો', 'ફરી', 'ફરીથી');
+  CMD.dunno.push('khabar nathi', 'ખબર નથી', 'mane khabar nathi', 'મને ખબર નથી');
+  CMD.pause.push('thobho', 'થોભો');
+}
+const CMDN = {}; for (const c in CMD) CMDN[c] = CMD[c].map(x => norm(x));
 function command(alts) {
+  for (const a of alts) { const h = norm(a); for (const c in CMDN) if (CMDN[c].includes(h)) return c; }
+  return null;
+}
+function commandOld(alts) {
   for (const a of alts) { const h = norm(a); for (const c in CMD) if (CMD[c].includes(h)) return c; }
   return null;
 }
@@ -261,6 +330,7 @@ function chooseVoice(base, gender, preferredURI) {
 }
 function voiceSet() {
   const g = S.settings.gender, other = g === 'female' ? 'male' : 'female';
+  if (GU) { const hi = chooseVoice('hi', 'female', null); return { es: hi, partner: hi, en: chooseVoice('en', g, S.settings.enVoice) }; }
   const es = chooseVoice('es', g, S.settings.esVoice);
   let partner = chooseVoice('es', other, null);
   if (!partner || (es && partner.voiceURI === es.voiceURI)) partner = es;
@@ -268,21 +338,22 @@ function voiceSet() {
   return { es, partner, en };
 }
 function refreshVoices() { try { VOICES = speechSynthesis.getVoices() || []; } catch (e) { VOICES = []; } }
-const coachName = () => S.settings.gender === 'male' ? 'Leo' : 'Lola';
+const coachName = () => GU ? 'Meera' : (S.settings.gender === 'male' ? 'Leo' : 'Lola');
 
 // ---------- run control ----------
-const PAUSED = { paused: true }, QUIT = { quit: true };
+const PAUSED = { paused: true }, QUIT = { quit: true }, JUMP = { jump: true };
 let run = { active: false, paused: false, quit: false, rec: null, tapResolve: null };
-function check() { if (run.quit) throw QUIT; if (run.paused) throw PAUSED; }
+function check() { if (run.quit) throw QUIT; if (run.jump) { run.jump = false; throw JUMP; } if (run.paused) throw PAUSED; }
 
 // ---------- speech out ----------
 function speak(text, who = 'es', rateMul = 1, pitch = 1) {
   check();
+  if (GU && who !== 'en') { text = guToDeva(text); if (who === 'partner') pitch = Math.min(pitch, 0.88); }
   return new Promise((resolve, reject) => {
     const vs = voiceSet();
     const u = new SpeechSynthesisUtterance(text);
     const v = who === 'en' ? vs.en : who === 'partner' ? vs.partner : vs.es;
-    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = who === 'en' ? 'en-US' : 'es-MX';
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = who === 'en' ? 'en-US' : (GU ? 'hi-IN' : 'es-MX');
     u.rate = Math.max(0.5, Math.min(1.4, (who === 'en' ? 1 : S.settings.rate) * rateMul));
     u.pitch = pitch;
     let done = false;
@@ -298,6 +369,24 @@ const en = t => speak(t, 'en');
 const PRAISE = ['¡Muy bien!', '¡Perfecto!', '¡Eso es!', '¡Excelente!', '¡Qué bien!', '¡Bravo!', '¡Fantástico!', '¡Genial!', '¡Correcto!', '¡Así se dice!', '¡Muy bien dicho!', '¡Impecable!', '¡Me encanta!', '¡Súper!', '¡Lo tienes!'];
 const QUICK = ['¡Bien!', '¡Sí!', '¡Correcto!', '¡Eso!', '¡Muy bien!', '¡Perfecto!'];
 const NEAR = ['Casi.', 'Good try.', 'Almost there.', 'Close!', 'Nice effort.'];
+if (GU) {
+  PRAISE.splice(0, PRAISE.length, 'ખૂબ સરસ!', 'શાબાશ!', 'વાહ!', 'એકદમ સાચું!', 'બહુ સરસ!', 'ઉત્તમ!', 'બરાબર!', 'કમાલ છે!', 'જોરદાર!', 'સરસ બોલ્યા!');
+  QUICK.splice(0, QUICK.length, 'સરસ!', 'હા!', 'બરાબર!', 'સાચું!', 'શાબાશ!');
+  NEAR.splice(0, NEAR.length, 'Good try.', 'Almost there.', 'Close!', 'Nice effort.');
+}
+const MILESTONES = GU ? { 3: 'ત્રણ સાચા!', 5: 'પાંચ સાચા! વાહ!', 10: 'દસ સાચા! તમે તો સ્ટાર છો!', 15: 'પંદર! જોરદાર!', 20: 'વીસ સાચા! કમાલ!' }
+  : { 3: '¡Tres seguidas!', 5: '¡Cinco seguidas! ¡Increíble!', 10: '¡Diez seguidas! ¡Eres una estrella!', 15: '¡Quince! ¡Imparable!', 20: '¡Veinte seguidas! ¡Campeón!' };
+const T = GU ? {
+  hello: 'નમસ્તે!', iam: n => 'હું ' + n + ' છું.', reviewDay: 'આજે પુનરાવર્તનનો દિવસ છે.', practiceDone: 'શાબાશ! અભ્યાસ પૂરો!',
+  passed: 'અભિનંદન!', passed2: 'તમે કરી બતાવ્યું!', nameHi: n => 'કેમ છો, ' + n + '!', nameNice: n => 'મળીને આનંદ થયો, ' + n + '!',
+  commandsTip: 'Answer out loud after the beep. Say "fari bolo" to hear something again, or "khabar nathi" if you don\'t know.',
+  hintCmds: ['ફરી બોલો', 'ખબર નથી']
+} : {
+  hello: '¡Hola!', iam: n => 'Soy ' + n + '.', reviewDay: 'Hoy es día de repaso.', practiceDone: '¡Muy bien! ¡Repaso completo!',
+  passed: '¡Felicidades!', passed2: '¡Lo lograste!', nameHi: n => '¡Hola, ' + n + '!', nameNice: n => '¡Mucho gusto, ' + n + '!',
+  commandsTip: 'Answer out loud after the beep. Say "repite" to hear something again, or "no sé" if you don\'t know.',
+  hintCmds: ['Repite', 'No sé']
+};
 // The learner's name, spelled the way the coach should pronounce it.
 const userSay = () => (S.user && S.user.confirmed && (S.user.say || S.user.name)) || '';
 // "¡Muy bien!" -> "¡Muy bien, Satya!"; "¡Cinco seguidas! ¡Increíble!" -> "... ¡Increíble, Satya!"
@@ -313,7 +402,7 @@ async function cheer(quick) {
   const c = S.session ? S.session.combo : 0;
   const pitch = 1 + (Math.random() * 0.15 - 0.03);
   if (!quick && [3, 5, 10, 15, 20].includes(c)) {
-    const big = { 3: '¡Tres seguidas!', 5: '¡Cinco seguidas! ¡Increíble!', 10: '¡Diez seguidas! ¡Eres una estrella!', 15: '¡Quince! ¡Imparable!', 20: '¡Veinte seguidas! ¡Campeón!' }[c];
+    const big = MILESTONES[c];
     FX.level(); await speak(withName(big), 'es', 1.05, pitch); return;
   }
   await speak(withName(praiseLine(quick ? QUICK : PRAISE)), 'es', 1.05, pitch);
@@ -357,7 +446,7 @@ function hintFor(keys, extra = []) {
   extra.forEach(add);
   const nx = out.length;
   shuffle(keys).forEach(k => ITEMS[k] && add(ITEMS[k].say));
-  return shuffle(out.slice(0, Math.max(nx, 14))).concat(['Repite', 'No sé']).join('. ') + '.';
+  return shuffle(out.slice(0, Math.max(nx, 14))).concat(T.hintCmds).join('. ') + '.';
 }
 function hintRecall(k) {
   const it = ITEMS[k]; if (!it) return '';
@@ -407,6 +496,7 @@ async function recordUtterance(o = {}) {
   });
 }
 function engine() {
+  if (GU) return 'ondevice';
   const e = S.settings.engine;
   if (e === 'ondevice') return 'ondevice';
   if (e === 'apple') return SR ? 'apple' : 'ondevice';
@@ -430,7 +520,7 @@ async function listenOnDevice(lang, hint) {
   }
   if (!rec.audio) return { alts: [], err: 'nospeech' };
   setOrb('think'); status('…');
-  const out = await transcribe(rec.audio, lang.startsWith('es') ? 'spanish' : 'english', 40, lang.startsWith('es') && S.settings.asrHints !== false ? hint : '');
+  const out = await transcribe(rec.audio, lang === LP.listen ? LP.asr : 'english', 40, lang === LP.listen && S.settings.asrHints !== false ? hint : '');
   check();
   lastAsrMs = out.ms || 0;
   S.auto.hinted = (S.auto.hinted || 0) + (out.prompted ? 1 : 0); S.auto.asrN = (S.auto.asrN || 0) + 1;
@@ -455,7 +545,7 @@ function listenOnce(lang) {
     try { rec.start(); } catch (e) { ended = true; clearTimeout(t); run.rec = null; resolve({ alts: [], err: 'start-failed' }); }
   });
 }
-async function listen(lang = 'es-MX', hint = '') {
+async function listen(lang = LP.listen, hint = '') {
   check();
   await sleep(250);
   check();
@@ -498,10 +588,11 @@ function show(id) { document.querySelectorAll('.screen').forEach(s => s.hidden =
 function setOrb(state) { const o = $('#orb'); if (o) o.dataset.state = state; }
 function showTap(on) { $('#tapBtn').hidden = !on; }
 function status(t) { const e = $('#status'); if (e) e.textContent = t || ''; }
-function setPhase(label) { $('#phase').textContent = label; }
+function setPhase(label) { $('#phase').textContent = (S.session && S.session.practice ? 'Practice · ' : '') + label; }
 function showText(es, enText) {
   if (S.settings.earsOnly) { $('#es').textContent = ''; $('#en').textContent = ''; return; }
-  $('#es').textContent = es || ''; $('#en').textContent = enText || '';
+  const rom = GU ? romOf(es) : '';
+  $('#es').textContent = (es || '').replace(/\s*…\s*/g, ' … ').trim() + (rom ? '\n' + rom : ''); $('#en').textContent = enText || '';
 }
 function clearText() { $('#es').textContent = ''; $('#en').textContent = ''; }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => t.hidden = true, 1800); }
@@ -530,8 +621,8 @@ function dueKeys(exclude = []) {
 const learnedKeys = () => Object.keys(S.srs).filter(k => ITEMS[k]);
 
 // ---------- session planning ----------
-function planSession() {
-  const unit = SCHEDULE[S.pos];
+function planSession(pos = S.pos) {
+  const unit = SCHEDULE[pos];
   const steps = [{ t: 'intro' }];
   let today = [], scenes = [];
   if (unit.kind === 'lesson') {
@@ -556,26 +647,26 @@ function planSession() {
   });
   steps.push({ t: 'lightning' });
   steps.push({ t: 'quiz' });
-  return { pos: S.pos, posId: SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
+  return { pos, posId: SCHEDULE[pos] ? SCHEDULE[pos].id : 'done', steps, idx: 0, activeMs: 0, today, combo: 0, xp: 0, quiz: null, startedDay: today_() };
 }
 function today_() { return today(); }
 
 // ---------- step runners ----------
 let sentFirstHint = 0;
 async function stepIntro() {
-  const unit = SCHEDULE[S.pos];
+  const unit = SCHEDULE[S.session.pos];
   if (unit.kind === 'lesson') {
     const L = LESSONS[unit.li];
     setPhase('Lesson ' + (unit.li + 1) + ' · ' + L.title);
     showText(L.title, L.place);
-    await say(withName('¡Hola!') + ' Soy ' + coachName() + '.', 1);
+    await say(withName(T.hello) + ' ' + T.iam(coachName()), 1);
     await en('Lesson ' + (unit.li + 1) + '. ' + L.place + '.');
     await en(L.tip);
-    if (S.pos === 0) await en('Answer out loud after the beep. Say "repite" to hear something again, or "no sé" if you don\'t know.');
+    if (S.session.pos === 0 && !S.session.practice) await en(T.commandsTip);
   } else {
     setPhase('Review day');
     showText('Repaso', 'Review and conversation day');
-    await say(withName('¡Hola!') + ' Hoy es día de repaso.');
+    await say(withName(T.hello) + ' ' + T.reviewDay);
     await en('Review day. No new words today. We practise what you know and have two conversations.');
   }
 }
@@ -587,7 +678,7 @@ async function stepTeach(k) {
   await say(it.say, 0.85);
   const hint = hintFor(lessonKeys(it.lesson).filter(x => x !== k), [it.say]);
   for (let attempt = 0; attempt < 2; attempt++) {
-    const r = await listen('es-MX', hint);
+    const r = await listen(LP.listen, hint);
     if (r.cmd === 'repeat') { await say(it.say, 0.75); attempt--; continue; }
     const s = score(r.alts, it.answers);
     if (s >= 0.6) { FX.good(); addXP(5); await cheer(true); break; }
@@ -606,7 +697,7 @@ async function recall(k, opts = {}) {
   let tries = 0;
   const hint = hintRecall(k);
   while (true) {
-    const r = await listen('es-MX', hint);
+    const r = await listen(LP.listen, hint);
     if (r.cmd === 'repeat') { await en(it.en); continue; }
     if (!r.alts.length && tries++ < 1) { await en("Didn't catch that. " + it.en); continue; }
     const dunno = r.cmd === 'dunno';
@@ -625,7 +716,7 @@ async function recall(k, opts = {}) {
     if (opts.quiz) { await say(it.say); return false; }
     await en(s >= 0.5 ? praiseLine(NEAR) + ' Listen.' : (dunno ? 'No problem. It is:' : 'Good try. It is:'));
     await say(it.say, 0.8);
-    const r2 = await listen('es-MX', hint);
+    const r2 = await listen(LP.listen, hint);
     if (score(r2.alts, it.answers) >= 0.6) { FX.good(); await cheer(true); }
     return false;
   }
@@ -646,7 +737,7 @@ async function stepScene(st) {
   if (st.pass === 1 && model) { await say(model, 0.8); }
   const hint = hintFor(lessonKeys(st.li), answers);
   for (let a = 0; a < 2; a++) {
-    const r = await listen('es-MX', hint);
+    const r = await listen(LP.listen, hint);
     if (r.cmd === 'repeat') { await en(cue); a--; continue; }
     const s = score(r.alts, answers);
     showText(answers[0], cue);
@@ -704,7 +795,7 @@ async function stepQuiz() {
     if (ok) q.correct++; else q.missed.push(k);
     q.i++; save();
   }
-  if (!q.logged) { q.logged = true; S.history.push({ day: today(), pos: S.pos, score: q.correct, attempt: q.attempt, minutes: Math.round(st.activeMs / 60000) }); save(); }
+  if (!q.logged) { q.logged = true; S.history.push({ day: today(), pos: st.pos, practice: !!st.practice, score: q.correct, attempt: q.attempt, minutes: Math.round(st.activeMs / 60000) }); save(); }
   if (q.correct >= PASS_MARK) return pass(q.correct);
   // fail -> targeted review then retake
   q.phase = 'review'; q.ri = 0; save();
@@ -729,6 +820,13 @@ async function pass(score) {
   FX.fanfare();
   setPhase('Passed!');
   showText('¡Felicidades!', score + ' out of 10');
+  if (st.practice) {
+    addXP(50);
+    S.session = S.mainSession || null; S.mainSession = null; save();
+    await say(withName(T.practiceDone));
+    await en(score + ' out of ten. Practice done. Your place in the course is unchanged.');
+    throw QUIT;
+  }
   const t = today();
   if (S.lastPass !== t) {
     const y = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
@@ -741,7 +839,7 @@ async function pass(score) {
   S.lastPassedId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : S.lastPassedId;
   S.pos = Math.min(S.pos + 1, SCHEDULE.length);
   S.session = null; save();
-  await say(withName('¡Felicidades!') + ' ¡Lo lograste!');
+  await say(withName(T.passed) + ' ' + T.passed2);
   await en(score + ' out of ten. Next lesson unlocked. Your streak is ' + S.streak + (S.streak === 1 ? ' day.' : ' days.'));
   throw QUIT;
 }
@@ -813,7 +911,7 @@ async function stepName() {
     const sayAs = $('#sayIn').value.trim() || name;
     showText(name, '');
     namePanel('confirm');
-    await say('¡Hola, ' + sayAs + '!', 0.95);
+    await say(T.nameHi(sayAs), 0.95);
     await en('Did I say your name right? Say yes or no.');
     let ans = null;
     for (let i = 0; i < 2 && !ans; i++) {
@@ -826,7 +924,7 @@ async function stepName() {
       S.user = { name, say: sayAs, confirmed: true, at: new Date().toISOString() }; save();
       namePanel(null);
       FX.good();
-      await say('¡Mucho gusto, ' + sayAs + '!');
+      await say(T.nameNice(sayAs));
       return;
     }
     if (ans === 'go') continue;
@@ -869,6 +967,9 @@ async function runSession(nameOnly) {
   }
   while (!run.quit && S.session && S.session.idx < S.session.steps.length) {
     const st = S.session.steps[S.session.idx];
+    S.session.stepAt = S.session.stepAt || {};
+    S.session.stepAt[S.session.idx] = S.session.activeMs;
+    updateJumpButtons();
     try {
       if (st.t === 'intro') await stepIntro();
       else if (st.t === 'label') { setPhase(st.text); if (st.say) await en(st.say); else await sleep(200); }
@@ -878,15 +979,19 @@ async function runSession(nameOnly) {
       else if (st.t === 'scene') { setPhase('Scene' + (st.pass === 2 ? ' · no help' : '')); await stepScene(st); }
       else if (st.t === 'lightning') await stepLightning();
       else if (st.t === 'quiz') await stepQuiz();
+      if (run.jump) { run.jump = false; continue; }   // a jump landed while the step was finishing
       if (S.session) { S.session.idx++; save(); }
     } catch (e) {
+      if (e === JUMP) continue;
       if (e === PAUSED) { save(); await waitResume(); if (run.quit) break; continue; }
       if (e === QUIT) break;
       if (e && e.message === 'nosr') { alertBox('Listening is not available in this browser. Open the app in Safari on iPhone, or Chrome on a computer.'); break; }
       console.error(e); toast('Something went wrong; continuing'); if (S.session) { S.session.idx++; save(); }
     }
   }
-  run.active = false; clearInterval(tick); save();
+  run.active = false; clearInterval(tick);
+  if (S.session && S.session.practice) { S.session = S.mainSession || null; S.mainSession = null; }
+  save();
   try { speechSynthesis.cancel(); } catch (e) {}
   renderHome(); show('home');
 }
@@ -921,6 +1026,87 @@ function unlockAudio() {
   ac();
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
 }
+// ---------- rewind / fast forward (about 30 seconds of teaching) ----------
+const STEP_SECS = { intro: 20, label: 2, teach: 12, recall: 9, sceneIntro: 6, scene: 8, lightning: 30 };
+function canJump() { const st = S.session; if (!run.active || run.setup || !st) return false; const step = st.steps[st.idx]; return !!step && step.t !== 'quiz'; }
+function updateJumpButtons() { const ok = canJump(); $('#rwBtn').disabled = !ok; $('#ffBtn').disabled = !ok; }
+function interrupt() {
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (run.rec) try { run.rec.abort(); } catch (e) {}
+  if (run.stopRec) run.stopRec();
+  if (run.tapResolve) { const r = run.tapResolve; run.tapResolve = null; run.tapCancel = true; r(); }
+}
+function jump(dir) {
+  if (!canJump()) { toast('Not during the quiz'); return; }
+  const st = S.session, at = st.stepAt || {};
+  const quizAt = st.steps.findIndex(x => x.t === 'quiz');
+  let to;
+  if (dir < 0) {
+    const target = st.activeMs - 30000;
+    to = 0;
+    for (let i = st.idx - 1; i >= 0; i--) { if (at[i] !== undefined && at[i] <= target) { to = i; break; } }
+    if (to === 0 && st.idx > 3 && !Object.keys(at).some(k => +k < st.idx)) to = st.idx - 3;
+  } else if (st.steps[st.idx].t === 'lightning') {
+    to = st.idx + 1;
+  } else {
+    let budget = 30, i = st.idx;
+    while (i < st.steps.length - 1 && budget > 0) { budget -= STEP_SECS[st.steps[i].t] || 8; i++; if (st.steps[i].t === 'lightning' || st.steps[i].t === 'quiz') break; }
+    to = Math.max(i, st.idx + 1);
+  }
+  if (quizAt >= 0) to = Math.min(to, quizAt);
+  if (to === st.idx && dir > 0) return;
+  st.idx = to; save();
+  toast(dir < 0 ? '⏪ Back 30 s' : '30 s ⏩');
+  if (!run.paused) { run.jump = true; interrupt(); }
+  updateJumpButtons();
+}
+
+// ---------- language switch (separate progress per language) ----------
+const PER_LANG = ['pos', 'posId', 'lastPassedId', 'xp', 'streak', 'lastPass', 'srs', 'history', 'session', 'mainSession', 'auto'];
+function switchLang(l) {
+  if (!LANGS[l] || l === ACTIVE) return;
+  const cur = {}; PER_LANG.forEach(k => cur[k] = S[k]);
+  S.langs = S.langs || {}; S.langs[ACTIVE] = cur;
+  const next = S.langs[l] || {}, fresh = DEFAULT();
+  PER_LANG.forEach(k => S[k] = next[k] !== undefined ? next[k] : fresh[k]);
+  delete S.langs[l];
+  S.lang = l;
+  // Written directly: save() would compute the position with this language's lesson list.
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  location.reload();
+}
+
+// ---------- lessons menu ----------
+function unitTitle(u) { return u.kind === 'lesson' ? LESSONS[u.li].title : 'Día de repaso'; }
+function unitSub(u) { return u.kind === 'lesson' ? LESSONS[u.li].place : 'Review · lessons ' + (u.from + 1) + '–' + (u.to + 1); }
+function renderLessons() {
+  const ul = $('#lessonList'); ul.innerHTML = '';
+  SCHEDULE.forEach((u, i) => {
+    const state = i < S.pos ? 'passed' : i === S.pos ? 'current' : 'locked';
+    const best = S.history.filter(h => h.pos === i).reduce((m, h) => Math.max(m, h.score || 0), 0);
+    const b = document.createElement('button');
+    b.className = 'lesson ' + state; b.disabled = state === 'locked';
+    const icon = state === 'passed' ? '✓' : state === 'current' ? '▶' : '🔒';
+    let note = state === 'passed' ? 'Unlocked · passed' + (best ? ', best ' + best + '/10' : '') + ' · tap to practise'
+      : state === 'current' ? (S.session && S.session.pos === i && S.session.idx > 0 ? 'In progress · ' + Math.floor(S.session.activeMs / 60000) + ' min done · tap to continue' : 'Up next · tap to start')
+      : 'Locked · pass the quiz before it to unlock';
+    b.innerHTML = '<span class="li">' + icon + '</span><span class="lt"><b></b><small></small></span>';
+    b.querySelector('b').textContent = (i + 1) + '. ' + unitTitle(u);
+    b.querySelector('small').textContent = unitSub(u) + ' — ' + note;
+    if (state === 'passed') b.onclick = () => startPractice(i);
+    if (state === 'current') b.onclick = () => startOrContinue(false);
+    ul.appendChild(b);
+  });
+}
+function startPractice(i) {
+  if (i >= S.pos) return;   // only passed lessons
+  unlockAudio();
+  if (engine() === 'ondevice') asrStart();
+  if (S.session && !S.session.practice) S.mainSession = S.session;
+  S.session = planSession(i); S.session.practice = true;
+  save(); runSession();
+}
+
 function startOrContinue(restart) {
   unlockAudio();
   if (engine() === 'ondevice') { if (S.asrLoading) { S.settings.gpu = false; } asrStart(); }
@@ -988,7 +1174,7 @@ function renderFeedbackList() {
   $('#fbCount').textContent = S.feedback.length ? S.feedback.length + ' note' + (S.feedback.length > 1 ? 's' : '') + ' saved' : 'No notes yet';
 }
 function feedbackReport() {
-  const lines = ['Spanish Voice Coach feedback — app v' + APP_VERSION, 'Position: ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · XP ' + S.xp + ' · streak ' + S.streak, ''];
+  const lines = ['Spanish Voice Coach feedback — app v' + APP_VERSION + ' · learning ' + LP.name, 'Position: ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · XP ' + S.xp + ' · streak ' + S.streak, ''];
   lines.push('MY NOTES');
   S.feedback.forEach(f => lines.push('- [' + f.at.slice(0, 10) + ', v' + f.v + ', ' + f.where + '] ' + f.text));
   if (!S.feedback.length) lines.push('- (none)');
@@ -1064,6 +1250,7 @@ function renderSettings() {
   $('#earsOnly').checked = st.earsOnly; $('#tapToTalk').checked = st.tapToTalk;
   document.querySelectorAll('[data-engine]').forEach(b => b.classList.toggle('sel', b.dataset.engine === st.engine));
   $('#engineNow').textContent = 'Now using: ' + (engine() === 'ondevice' ? 'on-device (Whisper)' + (asrReady ? ', ready' + (asrDevice ? ' · ' + (asrDevice === 'webgpu' ? 'fast GPU mode' : 'CPU mode') : '') : '') : 'iPhone speech recognition');
+  $('#genderCard').hidden = GU; $('#esCard').hidden = GU; $('#guVoiceCard').hidden = !GU;
   const hasGood = voicesFor('es').some(x => x.q >= 2);
   $('#voiceTip').hidden = hasGood;
   $('#noVoices').hidden = VOICES.length > 0;
@@ -1098,6 +1285,8 @@ function renderHome() {
   $('#xpTotal').textContent = S.xp.toLocaleString() + ' pts';
   $('#streak').textContent = S.streak + (S.streak === 1 ? ' day' : ' days');
   $('#coach').textContent = coachName();
+  $('#langSel').value = ACTIVE;
+  document.querySelector('.brand').firstChild.textContent = LP.brand;
   if (done) { $('#nextTitle').textContent = 'All done for this release'; $('#nextPlace').textContent = 'Send feedback to get the next block'; }
   else if (unit.kind === 'lesson') { const L = LESSONS[unit.li]; $('#nextNum').textContent = 'Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · Lesson ' + (unit.li + 1); $('#nextTitle').textContent = L.title; $('#nextPlace').textContent = L.place; }
   else { $('#nextNum').textContent = 'Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length; $('#nextTitle').textContent = 'Día de repaso'; $('#nextPlace').textContent = 'Review day · lessons ' + (unit.from + 1) + '–' + (unit.to + 1); }
@@ -1115,6 +1304,7 @@ function renderHome() {
 }
 function renderVoiceBanner() {
   const b = $('#voiceBanner'); if (!b) return;
+  if (GU) { b.hidden = true; return; }
   const es = voicesFor('es');
   b.hidden = !es.length || es.some(x => x.q >= 2) || S.voiceBannerDismissed;
 }
@@ -1135,6 +1325,11 @@ function init() {
   let polls = 0; const p = setInterval(() => { refreshVoices(); renderVoiceBanner(); if (++polls > 40) clearInterval(p); }, 500);
 
   $('#startBtn').onclick = () => startOrContinue(false);
+  $('#langSel').onchange = e => { if (run.active) { e.target.value = ACTIVE; return; } switchLang(e.target.value); };
+  $('#rwBtn').onclick = () => jump(-1);
+  $('#ffBtn').onclick = () => jump(1);
+  $('#lessonsBtn').onclick = () => { renderLessons(); show('lessons'); };
+  $('#lessonsBack').onclick = () => { renderHome(); show('home'); };
   $('#restartBtn').onclick = () => startOrContinue(true);
   $('#pauseBtn').onclick = () => run.paused ? resume() : pause();
   $('#resumeBig').onclick = resume;
