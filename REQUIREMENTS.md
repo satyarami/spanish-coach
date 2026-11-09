@@ -24,6 +24,16 @@ The app teaches Spanish or Gujarati, chosen from a menu on the home screen.
 - **Gujarati content:** beginner course for an English speaker, set on a trip through Gujarat. The first block has 10 lessons and 2 review days; more follow at the same link. After you answer, the text shows in Gujarati script with a romanized form (for example "kem cho").
 - **Depends on the iPhone:** the iPhone has no Gujarati voice, so Gujarati is spoken only by the Hindi voice Lekha, with no voice choice for Gujarati. The app converts the Gujarati text to Hindi letters, which line up one-to-one. Satya approved how it sounds. Listening uses on-device recognition and compares answers by sound, so Gujarati script, Hindi script or English letters all count.
 
+## Levels
+
+Each language has three levels, chosen from a Level menu next to the Language menu.
+
+- **Beginner:** everyday survival phrases and short scenes (the existing courses).
+- **Intermediate:** longer sentences, past and future, plans, opinions, problems to solve, and longer conversations with less help.
+- **Advanced:** fluent conversation: hypotheticals, wishes and doubts, idioms, telling stories, debating and persuading, with natural pace and less help.
+- **Size:** Spanish and Gujarati each get 30 Intermediate and 30 Advanced lessons, with a review day after every 5, in the same 15-minute format and 8-of-10 quiz.
+- **Separate progress per level:** each level of each language keeps its own place, passed lessons, streak and points. Switching never loses your place.
+
 ## Daily session (15 min) and quiz gate
 
 Every session is 15 minutes: about 11 minutes of spoken learning, then a spoken quiz of about 4 minutes. Each phrase is practised once in the lesson, with no extra repetition. Passing the quiz marks the lesson as passed. You can jump to any lesson at any time.
