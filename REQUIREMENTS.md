@@ -26,7 +26,7 @@ The app teaches Spanish or Gujarati, chosen from a menu on the home screen.
 
 ## Daily session (15 min) and quiz gate
 
-Every session is 15 minutes: about 11 minutes of spoken learning, then a spoken quiz of about 4 minutes. Each phrase is practised once in the lesson, with no extra repetition. You must pass the quiz to unlock the next lesson.
+Every session is 15 minutes: about 11 minutes of spoken learning, then a spoken quiz of about 4 minutes. Each phrase is practised once in the lesson, with no extra repetition. Passing the quiz marks the lesson as passed. You can jump to any lesson at any time.
 
 | Part | Minutes | What happens |
 | --- | --- | --- |
@@ -48,12 +48,12 @@ A failed quiz loops through a short review of the missed phrases and a fresh qui
 
 **Gate rules**
 
-- Passing means 8 of 10 correct (80%). A pass unlocks the next lesson and adds to your streak.
+- Passing means 8 of 10 correct (80%). A pass marks the lesson as passed (✓, with your best score), moves you on to the next lesson, and adds to your streak.
 - If you fail, a 3-minute review drills only the phrases you missed. Then you take a fresh, reshuffled quiz. Retries are unlimited, and the quiz can't be skipped.
 - After each quiz answer, the app says the correct Spanish so the quiz also teaches.
 - The timer counts only active time. Pausing stops the clock.
 - **Rewind and fast forward:** ⏪ 30s and 30s ⏩ buttons during a session jump back or ahead by about 30 seconds of teaching. Rewind uses the actual time each step started. Neither works inside the quiz. Fast forward during the lightning round goes straight to the quiz.
-- **Lessons menu:** the home screen lists every session. Passed lessons (✓) can be replayed as practice; this never changes your current place, and passing again doesn't skip you ahead. The current lesson (▶) continues exactly where you left off. Completed lessons are shown as unlocked. Lessons whose quiz you haven't passed still appear in the menu, marked locked (🔒), but can't be opened.
+- **Lessons menu:** the home screen lists every session, and any lesson can be opened at any time; nothing is locked (changed on Nov 8). Passed lessons are tracked per language and marked ✓ with your best quiz score. If you leave a lesson part-way and jump to another, it remembers where you were, and you continue from there when you come back. Passing a lesson's quiz moves you on to the next lesson in order. Earlier passes carry over.
 
 ## Voice-only interaction
 
