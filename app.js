@@ -2,8 +2,12 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 const CHANGELOG = [
+  { v: '1.11.0', date: '2026-11-08', items: [
+    'Levels: Beginner, Intermediate and Advanced for Spanish and Gujarati, chosen from the Level menu. Each level keeps its own progress.',
+    'New: Spanish Intermediate and Advanced (30 lessons each) and Gujarati Intermediate and Advanced (30 lessons each).'
+  ] },
   { v: '1.10.0', date: '2026-11-08', items: [
     'Jump to any lesson from the Lessons menu; nothing is locked.',
     'Passed lessons are tracked with your best score (✓). A lesson you leave part-way remembers where you were.'
@@ -83,8 +87,18 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 
 // ---------- language ----------
 // The active language is read before anything else, because the curriculum depends on it.
-const ACTIVE = (() => { try { const d = JSON.parse(localStorage.getItem('svc.state') || '{}'); return d && d.lang === 'gu' ? 'gu' : 'es'; } catch (e) { return 'es'; } })();
+const BOOT = (() => { try { return JSON.parse(localStorage.getItem('svc.state') || '{}') || {}; } catch (e) { return {}; } })();
+const ACTIVE = BOOT.lang === 'gu' ? 'gu' : 'es';
 const GU = ACTIVE === 'gu';
+const LEVELS_LIST = { b: 'Beginner', i: 'Intermediate', a: 'Advanced' };
+const CURRICULA = {
+  es: { b: window.CURRICULUM, i: window.CURRICULUM_ES_I, a: window.CURRICULUM_ES_A },
+  gu: { b: window.CURRICULUM_GU, i: window.CURRICULUM_GU_I, a: window.CURRICULUM_GU_A }
+};
+const LEVEL = (['i', 'a'].includes(BOOT.level) && CURRICULA[ACTIVE][BOOT.level] && CURRICULA[ACTIVE][BOOT.level].length) ? BOOT.level : 'b';
+// Each language+level is its own track with its own progress. Beginner keeps the original keys ('es', 'gu').
+const trackKey = (l, v) => l + (v === 'b' ? '' : '-' + v);
+const TRACK = trackKey(ACTIVE, LEVEL);
 const LANGS = {
   es: { code: 'es', name: 'Spanish', native: 'Español', listen: 'es-MX', asr: 'spanish', brand: 'Habla' },
   gu: { code: 'gu', name: 'Gujarati', native: 'ગુજરાતી', listen: 'gu-IN', asr: 'gujarati', brand: 'Bolo' }
@@ -105,7 +119,7 @@ function normGuLesson(L) {
 const romOf = t => ROM[t] || ROM[String(t || '').replace(/\s*…\s*/g, ' ').trim()] || '';
 
 // ---------- curriculum & schedule ----------
-const LESSONS = GU ? (window.CURRICULUM_GU || []).map(normGuLesson) : window.CURRICULUM;
+const LESSONS = GU ? (CURRICULA.gu[LEVEL] || []).map(normGuLesson) : CURRICULA.es[LEVEL];
 const ITEMS = {};                     // key -> {en, answers[], say, lesson}
 LESSONS.forEach((L, li) => L.items.forEach((it, n) => {
   const [en, ...es] = it;
@@ -121,7 +135,7 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 // ---------- state ----------
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
-  lang: 'es', langs: {},   // passed/parked are created by migrate()
+  lang: 'es', level: 'b', langs: {},   // passed/parked are created by migrate()
   settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null, gpu: false },
   user: null, session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
@@ -132,6 +146,7 @@ let S;
 const SCHEMA = 2;
 function migrate(d) {
   if (d.lang !== 'gu') d.lang = 'es';
+  d.level = LEVEL;
   if (!d.langs || typeof d.langs !== 'object') d.langs = {};
   d.settings = Object.assign(DEFAULT().settings, d.settings || {});
   d.auto = Object.assign(DEFAULT().auto, d.auto || {});
@@ -1079,14 +1094,18 @@ function jump(dir) {
 
 // ---------- language switch (separate progress per language) ----------
 const PER_LANG = ['pos', 'posId', 'lastPassedId', 'xp', 'streak', 'lastPass', 'srs', 'history', 'session', 'mainSession', 'auto', 'passed', 'parked'];
-function switchLang(l) {
-  if (!LANGS[l] || l === ACTIVE) return;
+function switchLang(l) { switchTrack(l, LEVEL); }
+function switchTrack(l, v) {
+  if (!LANGS[l] || !LEVELS_LIST[v]) return;
+  if (!(CURRICULA[l][v] && CURRICULA[l][v].length)) v = 'b';
+  const to = trackKey(l, v);
+  if (to === TRACK) return;
   const cur = {}; PER_LANG.forEach(k => cur[k] = S[k]);
-  S.langs = S.langs || {}; S.langs[ACTIVE] = cur;
-  const next = S.langs[l] || {}, fresh = DEFAULT();
+  S.langs = S.langs || {}; S.langs[TRACK] = cur;
+  const next = S.langs[to] || {}, fresh = DEFAULT();
   PER_LANG.forEach(k => S[k] = next[k] !== undefined ? next[k] : fresh[k]);
-  delete S.langs[l];
-  S.lang = l;
+  delete S.langs[to];
+  S.lang = l; S.level = v;
   // Written directly: save() would compute the position with this language's lesson list.
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
   location.reload();
@@ -1204,7 +1223,7 @@ function renderFeedbackList() {
   $('#fbCount').textContent = S.feedback.length ? S.feedback.length + ' note' + (S.feedback.length > 1 ? 's' : '') + ' saved' : 'No notes yet';
 }
 function feedbackReport() {
-  const lines = ['Spanish Voice Coach feedback — app v' + APP_VERSION + ' · learning ' + LP.name, 'Position: ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · XP ' + S.xp + ' · streak ' + S.streak, ''];
+  const lines = ['Spanish Voice Coach feedback — app v' + APP_VERSION + ' · learning ' + LP.name + ' (' + LEVELS_LIST[LEVEL] + ')', 'Position: ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · XP ' + S.xp + ' · streak ' + S.streak, ''];
   lines.push('MY NOTES');
   S.feedback.forEach(f => lines.push('- [' + f.at.slice(0, 10) + ', v' + f.v + ', ' + f.where + '] ' + f.text));
   if (!S.feedback.length) lines.push('- (none)');
@@ -1315,11 +1334,11 @@ function renderHome() {
   $('#xpTotal').textContent = S.xp.toLocaleString() + ' pts';
   $('#streak').textContent = S.streak + (S.streak === 1 ? ' day' : ' days');
   $('#coach').textContent = coachName();
-  $('#langSel').value = ACTIVE;
+  $('#langSel').value = ACTIVE; $('#levelSel').value = LEVEL;
   document.querySelector('.brand').firstChild.textContent = LP.brand;
   if (done) { $('#nextTitle').textContent = 'All done for this release'; $('#nextPlace').textContent = 'Send feedback to get the next block'; }
-  else if (unit.kind === 'lesson') { const L = LESSONS[unit.li]; $('#nextNum').textContent = 'Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · Lesson ' + (unit.li + 1); $('#nextTitle').textContent = L.title; $('#nextPlace').textContent = L.place; }
-  else { $('#nextNum').textContent = 'Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length; $('#nextTitle').textContent = 'Día de repaso'; $('#nextPlace').textContent = 'Review day · lessons ' + (unit.from + 1) + '–' + (unit.to + 1); }
+  else if (unit.kind === 'lesson') { const L = LESSONS[unit.li]; $('#nextNum').textContent = LEVELS_LIST[LEVEL] + ' · Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length + ' · Lesson ' + (unit.li + 1); $('#nextTitle').textContent = L.title; $('#nextPlace').textContent = L.place; }
+  else { $('#nextNum').textContent = LEVELS_LIST[LEVEL] + ' · Session ' + (S.pos + 1) + ' of ' + SCHEDULE.length; $('#nextTitle').textContent = GU ? 'પુનરાવર્તન' : 'Día de repaso'; $('#nextPlace').textContent = 'Review day · lessons ' + (unit.from + 1) + '–' + (unit.to + 1); }
   const resumable = S.session && S.session.pos === S.pos && S.session.idx > 0;
   $('#startBtn').textContent = resumable ? 'Continue (' + Math.floor(S.session.activeMs / 60000) + ' min done)' : 'Start today\'s session';
   $('#restartBtn').hidden = !resumable;
@@ -1356,6 +1375,7 @@ function init() {
 
   $('#startBtn').onclick = () => startOrContinue(false);
   $('#langSel').onchange = e => { if (run.active) { e.target.value = ACTIVE; return; } switchLang(e.target.value); };
+  $('#levelSel').onchange = e => { if (run.active) { e.target.value = LEVEL; return; } switchTrack(ACTIVE, e.target.value); };
   $('#rwBtn').onclick = () => jump(-1);
   $('#ffBtn').onclick = () => jump(1);
   $('#lessonsBtn').onclick = () => { renderLessons(); show('lessons'); };
