@@ -2,8 +2,12 @@
 (() => {
 'use strict';
 
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 const CHANGELOG = [
+  { v: '1.10.0', date: '2026-11-08', items: [
+    'Jump to any lesson from the Lessons menu; nothing is locked.',
+    'Passed lessons are tracked with your best score (✓). A lesson you leave part-way remembers where you were.'
+  ] },
   { v: '1.9.0', date: '2026-11-08', items: [
     'Learn Gujarati too: pick the language on the home screen. Each language keeps its own lessons, streak and points.',
     'Gujarati block 1: 10 lessons and 2 review days on a trip to Ahmedabad, spoken by Lekha, with Gujarati script and a romanized form.'
@@ -117,7 +121,7 @@ const keysOf = li => LESSONS[li].items.map((_, n) => LESSONS[li].id + ':' + n);
 // ---------- state ----------
 const DEFAULT = () => ({
   v: 1, pos: 0, xp: 0, streak: 0, lastPass: null, srs: {}, history: [],
-  lang: 'es', langs: {},
+  lang: 'es', langs: {},   // passed/parked are created by migrate()
   settings: { gender: 'female', esVoice: null, enVoice: null, rate: 0.9, earsOnly: false, tapToTalk: false, engine: 'auto', autoEngine: null, gpu: false },
   user: null, session: null, feedback: [], auto: { misses: {}, unheard: 0, mishear: [] }, seenVersion: null
 });
@@ -134,6 +138,17 @@ function migrate(d) {
   if (!d.srs || typeof d.srs !== 'object') d.srs = {};
   if (!Array.isArray(d.history)) d.history = [];
   if (!Array.isArray(d.feedback)) d.feedback = [];
+  // Passed lessons (by id, best score). Older versions only allowed moving on by passing,
+  // so every lesson before the current one was passed.
+  if (!d.passed || typeof d.passed !== 'object') {
+    d.passed = {};
+    const best = {};
+    d.history.forEach(h => { if (h && !h.practice && typeof h.pos === 'number' && h.score >= 8) best[h.pos] = Math.max(best[h.pos] || 0, h.score); });
+    const upto = d.posId === 'done' ? SCHEDULE.length : (d.posId ? SCHEDULE.findIndex(u => u.id === d.posId) : Number(d.pos) || 0);
+    for (let i = 0; i < Math.min(upto < 0 ? (Number(d.pos) || 0) : upto, SCHEDULE.length); i++) d.passed[SCHEDULE[i].id] = best[i] || 8;
+  }
+  if (!d.parked || typeof d.parked !== 'object') d.parked = {};
+  for (const id in d.parked) if (!SCHEDULE.some(u => u.id === id) || !d.parked[id] || !Array.isArray(d.parked[id].steps)) delete d.parked[id];
   // Position: prefer the lesson id; fall back to the old index.
   let pos = -1;
   if (d.posId === 'done' && d.lastPassedId) { const i = SCHEDULE.findIndex(u => u.id === d.lastPassedId); pos = i >= 0 ? i + 1 : SCHEDULE.length; }
@@ -837,10 +852,11 @@ async function pass(score) {
   addXP(100);
   st.today.forEach(k => { if (S.srs[k] && S.srs[k].box < 1) S.srs[k] = { box: 1, due: new Date(Date.now() + 864e5).toISOString().slice(0, 10) }; });
   S.lastPassedId = SCHEDULE[S.pos] ? SCHEDULE[S.pos].id : S.lastPassedId;
+  if (S.lastPassedId) { S.passed = S.passed || {}; S.passed[S.lastPassedId] = Math.max(S.passed[S.lastPassedId] || 0, score); }
   S.pos = Math.min(S.pos + 1, SCHEDULE.length);
   S.session = null; save();
   await say(withName(T.passed) + ' ' + T.passed2);
-  await en(score + ' out of ten. Next lesson unlocked. Your streak is ' + S.streak + (S.streak === 1 ? ' day.' : ' days.'));
+  await en(score + ' out of ten. Lesson passed. On to the next one. Your streak is ' + S.streak + (S.streak === 1 ? ' day.' : ' days.'));
   throw QUIT;
 }
 
@@ -1062,7 +1078,7 @@ function jump(dir) {
 }
 
 // ---------- language switch (separate progress per language) ----------
-const PER_LANG = ['pos', 'posId', 'lastPassedId', 'xp', 'streak', 'lastPass', 'srs', 'history', 'session', 'mainSession', 'auto'];
+const PER_LANG = ['pos', 'posId', 'lastPassedId', 'xp', 'streak', 'lastPass', 'srs', 'history', 'session', 'mainSession', 'auto', 'passed', 'parked'];
 function switchLang(l) {
   if (!LANGS[l] || l === ACTIVE) return;
   const cur = {}; PER_LANG.forEach(k => cur[k] = S[k]);
@@ -1079,33 +1095,47 @@ function switchLang(l) {
 // ---------- lessons menu ----------
 function unitTitle(u) { return u.kind === 'lesson' ? LESSONS[u.li].title : 'Día de repaso'; }
 function unitSub(u) { return u.kind === 'lesson' ? LESSONS[u.li].place : 'Review · lessons ' + (u.from + 1) + '–' + (u.to + 1); }
+const isPassed = i => !!(SCHEDULE[i] && S.passed && S.passed[SCHEDULE[i].id]);
+function sessionFor(i) {   // an unfinished session for lesson i, if any
+  const id = SCHEDULE[i] && SCHEDULE[i].id;
+  if (S.session && !S.session.practice && S.session.posId === id && S.session.idx > 0) return S.session;
+  return (S.parked && S.parked[id]) || null;
+}
 function renderLessons() {
   const ul = $('#lessonList'); ul.innerHTML = '';
   SCHEDULE.forEach((u, i) => {
-    const state = i < S.pos ? 'passed' : i === S.pos ? 'current' : 'locked';
-    const best = S.history.filter(h => h.pos === i).reduce((m, h) => Math.max(m, h.score || 0), 0);
+    const passed = isPassed(i), current = i === S.pos, open = sessionFor(i);
     const b = document.createElement('button');
-    b.className = 'lesson ' + state; b.disabled = state === 'locked';
-    const icon = state === 'passed' ? '✓' : state === 'current' ? '▶' : '🔒';
-    let note = state === 'passed' ? 'Unlocked · passed' + (best ? ', best ' + best + '/10' : '') + ' · tap to practise'
-      : state === 'current' ? (S.session && S.session.pos === i && S.session.idx > 0 ? 'In progress · ' + Math.floor(S.session.activeMs / 60000) + ' min done · tap to continue' : 'Up next · tap to start')
-      : 'Locked · pass the quiz before it to unlock';
+    b.className = 'lesson' + (passed ? ' passed' : '') + (current ? ' current' : '');
+    const icon = current ? '▶' : passed ? '✓' : '○';
+    const bits = [];
+    if (passed) bits.push('Passed · best ' + S.passed[u.id] + '/10');
+    else bits.push('Not passed yet');
+    if (open) bits.push('in progress, ' + Math.floor(open.activeMs / 60000) + ' min done');
+    else if (current) bits.push('up next');
     b.innerHTML = '<span class="li">' + icon + '</span><span class="lt"><b></b><small></small></span>';
     b.querySelector('b').textContent = (i + 1) + '. ' + unitTitle(u);
-    b.querySelector('small').textContent = unitSub(u) + ' — ' + note;
-    if (state === 'passed') b.onclick = () => startPractice(i);
-    if (state === 'current') b.onclick = () => startOrContinue(false);
+    b.querySelector('small').textContent = unitSub(u) + ' — ' + bits.join(' · ');
+    b.onclick = () => goToLesson(i);
     ul.appendChild(b);
   });
 }
-function startPractice(i) {
-  if (i >= S.pos) return;   // only passed lessons
-  unlockAudio();
-  if (engine() === 'ondevice') asrStart();
-  if (S.session && !S.session.practice) S.mainSession = S.session;
-  S.session = planSession(i); S.session.practice = true;
-  save(); runSession();
+// Jump to any lesson. A lesson left part-way is kept and resumed when you come back to it.
+function goToLesson(i) {
+  if (!SCHEDULE[i] || run.active) return;
+  const id = SCHEDULE[i].id;
+  S.parked = S.parked || {};
+  if (S.session && !S.session.practice && S.session.posId !== id && S.session.idx > 0) S.parked[S.session.posId] = S.session;
+  if (!(S.session && S.session.posId === id)) {
+    S.session = S.parked[id] || null;
+    if (S.session) S.session.pos = i;
+  }
+  delete S.parked[id];
+  S.pos = i;
+  save();
+  startOrContinue(false);
 }
+function startPractice(i) { goToLesson(i); }
 
 function startOrContinue(restart) {
   unlockAudio();
@@ -1296,7 +1326,7 @@ function renderHome() {
   $('#startBtn').disabled = done;
   // journey dots
   const j = $('#journey'); j.innerHTML = '';
-  SCHEDULE.forEach((u, i) => { const d = document.createElement('span'); d.className = 'dot' + (i < S.pos ? ' done' : i === S.pos ? ' now' : '') + (u.kind === 'review' ? ' rev' : ''); j.appendChild(d); });
+  SCHEDULE.forEach((u, i) => { const d = document.createElement('span'); d.className = 'dot' + (isPassed(i) ? ' done' : '') + (i === S.pos ? ' now' : '') + (u.kind === 'review' ? ' rev' : ''); j.appendChild(d); });
   $('#ver').textContent = 'v' + APP_VERSION;
   $('#fbBadge').textContent = S.feedback.length ? String(S.feedback.length) : '';
   renderVoiceBanner();
