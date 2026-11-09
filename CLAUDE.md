@@ -11,6 +11,7 @@ The owner (Satya) sometimes runs more than one Claude session on this repo. Foll
 - App changes go to the `preview` branch only. Test link: `https://raw.githack.com/satyarami/spanish-coach/<commit>/index.html`.
 - Nothing reaches `main` (the live site https://satyarami.github.io/spanish-coach/) until the owner tries it and says "release it".
 - On release: copy the current root app files to `previous/` (fix its "Use previous version" link to `../`), then merge `preview` into `main`.
+- Check `previous/` against newer saved data: if the new release adds a dimension to progress (e.g. levels), the older copy must not load data it doesn't understand. Add a guard at the top of `previous/app.js` that sends such learners back to `../` (see the level guard).
 - Always `git fetch` and build on top of the latest `origin/preview`; never force-push.
 - Bump `APP_VERSION` and add a `CHANGELOG` entry for every build.
 
