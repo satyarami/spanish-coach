@@ -1,3 +1,6 @@
+/* Guard: this older version has no levels. If the learner is on Intermediate/Advanced, go back to the current app
+   so this version can't mix that progress with Beginner. */
+try { const d = JSON.parse(localStorage.getItem('svc.state') || '{}'); if (d && (d.level === 'i' || d.level === 'a')) { location.replace('../'); throw new Error('level-guard'); } } catch (e) { if (e && e.message === 'level-guard') throw e; }
 /* Spanish Voice Coach — app engine. */
 (() => {
 'use strict';
