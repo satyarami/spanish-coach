@@ -98,7 +98,7 @@ button{font:inherit;cursor:pointer;border:0}
 .lesson .lt{display:flex;flex-direction:column}
 .lesson small{color:var(--muted);font-size:13px}
 .lesson.current{border-color:var(--gold);box-shadow:0 0 0 2px #f2a54144}
-.lesson.locked{opacity:.5}
+.lesson.passed .li{color:var(--leaf)}
 .btn.ghost:disabled{opacity:.35}
 label.sw{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
 input[type=range]{width:100%}
@@ -209,7 +209,7 @@ textarea{width:100%;height:160px;border-radius:12px;border:1px solid var(--line)
 <!-- LESSONS -->
 <section id="lessons" class="screen" hidden>
   <div class="top"><h2 style="color:var(--teal)">Lessons</h2><button class="iconbtn" id="lessonsBack">Back</button></div>
-  <p class="muted" style="font-size:14px">✓ unlocked (passed): practise any time · ▶ your current lesson · 🔒 locked until you pass the quiz before it</p>
+  <p class="muted" style="font-size:14px">Tap any lesson to go there · ✓ passed (best score) · ▶ where you are now · ○ not passed yet</p>
   <div id="lessonList"></div>
 </section>
 
